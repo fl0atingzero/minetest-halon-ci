@@ -1,0 +1,55 @@
+name: Oldosfan Minetest/Luanti Build (Windows)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  mingw:
+    name: "MinGW cross-compiler (${{ matrix.bits }}-bit)"
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        bits: [64]
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gettext unzip wine wine${{ matrix.bits }}
+
+      - name: Clone Minetest from Codeberg
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Install MinGW toolchain
+        working-directory: minetest
+        run: |
+          sudo ./util/buildbot/download_toolchain.sh /usr
+
+      - name: Clone mcl_localplayer mod
+        working-directory: minetest
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
+
+      - name: Build
+        working-directory: minetest
+        run: |
+          EXISTING_MINETEST_DIR=$PWD ./util/buildbot/buildwin${{ matrix.bits }}.sh B
+
+      - name: Runtime test
+        working-directory: minetest
+        run: |
+          dest=$(mktemp -d)
+          unzip -q -d "$dest" B/build/*.zip
+          cd "$dest"/luanti-*-win*
+          wine bin/luanti.exe --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "mingw${{ matrix.bits }}"
+          path: minetest/B/build/*.zip
+          if-no-files-found: error
