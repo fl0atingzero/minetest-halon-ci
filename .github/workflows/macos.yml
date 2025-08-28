@@ -39,6 +39,14 @@ jobs:
           cmake --build . -j$(sysctl -n hw.logicalcpu)
           make install
 
+      - name: Bundle clientmod
+        working-directory: minetest
+        run: |
+          app="build/macos/luanti.app/Contents/Resources"
+          mkdir -p "$app/clientmods"
+          cp -a clientmods/mcl_localplayer "$app/clientmods/"
+          cp clientmods/mods.conf "$app/clientmods/"
+
       - name: CPack
         working-directory: minetest
         run: |
