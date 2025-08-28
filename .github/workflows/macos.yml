@@ -17,7 +17,6 @@ jobs:
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
 
-      # Avoid brew tap conflict (cmake from local/pinned vs homebrew/core)
       - name: Remove preinstalled cmake and untap pinned
         run: |
           brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
@@ -33,7 +32,6 @@ jobs:
           set -euo pipefail
           source ./util/ci/common.sh
           install_macos_deps
-          # Avoid header/lib conflicts with Homebrew's jsoncpp
           brew uninstall jsoncpp || true
 
       - name: Build with CMake
@@ -50,12 +48,12 @@ jobs:
           cmake --build build -j"$(sysctl -n hw.logicalcpu)"
           cmake --install build
 
-      # Create a CPack install script that copies clientmods into the staged app
       - name: Write CPack install script
         working-directory: minetest
         run: |
           cat > cpack_install_clientmods.cmake <<'EOF'
-          # CPack runs this in "install" phase; CMAKE_INSTALL_PREFIX is its staging dir
+          # CPack runs this during the staged install.
+          # CMAKE_INSTALL_PREFIX is the CPack staging root.
           set(APP "${CMAKE_INSTALL_PREFIX}/luanti.app/Contents/Resources")
           file(MAKE_DIRECTORY "${APP}/clientmods")
           file(COPY "${CLIENTMOD_SRC}/mcl_localplayer" DESTINATION "${APP}/clientmods")
@@ -66,19 +64,11 @@ jobs:
         working-directory: minetest
         run: |
           cd build
-          # Clean CPack output dir to avoid stale artifacts in ./build/macos
           rm -rf macos
           cmake .. -DINSTALL_DEVTEST=FALSE
-          # Inject clientmods during CPack's staged install
           cpack -G ZIP -B macos \
             -D CPACK_INSTALL_SCRIPT="${PWD}/../cpack_install_clientmods.cmake" \
             -D CLIENTMOD_SRC="${PWD}/../clientmods"
-
-      # Optional: quick check that the ZIP contains clientmods
-      - name: Verify packaged clientmods
-        working-directory: minetest
-        run: |
-          unzip -l build/macos/*.zip | grep -E "clientmods/(|.*/)|clientmods/mods\.conf"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
