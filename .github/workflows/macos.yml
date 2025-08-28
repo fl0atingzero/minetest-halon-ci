@@ -17,6 +17,17 @@ jobs:
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf    
 
+      - name: Work around pinned Homebrew cmake
+        run: |
+          set -euo pipefail
+          # If cmake exists (often from a local/pinned tap), remove it so core cmake can be installed by the deps script
+          if brew list --formula cmake >/dev/null 2>&1; then
+            brew unpin cmake || true
+            brew uninstall --ignore-dependencies --force cmake || true
+          fi
+          # Ensure core tap is present
+          brew tap homebrew/core || true
+
       - name: Install deps
         working-directory: minetest      
         run: |
