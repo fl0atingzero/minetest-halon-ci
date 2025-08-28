@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  macos-arm64:
+  build-arm-macos-xcode:
     runs-on: macos-14
     steps:
       - name: Clone Minetest from Codeberg
@@ -15,64 +15,49 @@ jobs:
         working-directory: minetest
         run: |
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
-          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
-
-      - name: Remove preinstalled cmake and untap pinned
-        run: |
-          brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
-          brew untap local/pinned || true
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf    
 
       - name: Install deps
-        working-directory: minetest
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-          HOMEBREW_NO_ANALYTICS: "1"
-        shell: bash
+        working-directory: minetest      
         run: |
-          set -euo pipefail
           source ./util/ci/common.sh
           install_macos_deps
-          brew uninstall jsoncpp || true
+          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
+          brew uninstall jsoncpp
 
-      - name: Build with CMake
-        working-directory: minetest
+      - name: Build with Cmake
+        working-directory: minetest      
         run: |
-          cmake -S . -B build \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DCMAKE_FIND_FRAMEWORK=LAST \
-            -DCMAKE_INSTALL_PREFIX="${PWD}/build/macos" \
-            -DRUN_IN_PLACE=FALSE \
-            -DENABLE_GETTEXT=TRUE \
-            -DENABLE_SYSTEM_JSONCPP=OFF
-          cmake --build build -j"$(sysctl -n hw.logicalcpu)"
-          cmake --install build
-
-      - name: Write CPack install script
-        working-directory: minetest
-        run: |
-          cat > cpack_install_clientmods.cmake <<'EOF'
-          # CPack runs this during the staged install.
-          # CMAKE_INSTALL_PREFIX is the CPack staging root.
-          set(APP "${CMAKE_INSTALL_PREFIX}/luanti.app/Contents/Resources")
-          file(MAKE_DIRECTORY "${APP}/clientmods")
-          file(COPY "${CLIENTMOD_SRC}/mcl_localplayer" DESTINATION "${APP}/clientmods")
-          file(COPY "${CLIENTMOD_SRC}/mods.conf"       DESTINATION "${APP}/clientmods")
-          EOF
-
-      - name: CPack
-        working-directory: minetest
-        run: |
+          mkdir build
           cd build
-          rm -rf macos
-          cmake .. -DINSTALL_DEVTEST=FALSE
-          cpack -G ZIP -B macos \
-            -D CPACK_INSTALL_SCRIPT="${PWD}/../cpack_install_clientmods.cmake" \
-            -D CLIENTMOD_SRC="${PWD}/../clientmods"
+          cmake .. \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
+            -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
+            -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DENABLE_SYSTEM_JSONCPP=OFF
+          cmake --build . -j$(sysctl -n hw.logicalcpu)
+          make install
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: luanti-macos
-          path: minetest/build/macos/*.zip
-          if-no-files-found: error
+      - name: Build and Archive with Xcode
+        working-directory: minetest      
+        run: |
+          mkdir build_xcode
+          cd build_xcode
+          ../util/ci/build_xcode.sh
+
+      - name: Tests
+        working-directory: minetest      
+        run: |
+          mkdir -p "${HOME}/Library/Application Support/minetest/games/"
+          ln -s "${PWD}/games/devtest" "${HOME}/Library/Application Support/minetest/games/"
+          ./build/macos/luanti.app/Contents/MacOS/luanti --run-unittests
+          ./build_xcode/luanti.xcarchive/Products/Applications/luanti.app/Contents/MacOS/luanti --run-unittests
+
+      - name: Diff Resources
+        working-directory: minetest      
+        run: |
+          ls -lh ./build/macos/luanti.app/Contents/Resources
+          ls -lh ./build_xcode/build/Release/luanti.app/Contents/Resources
+          diff -rd ./build/macos/luanti.app/Contents/Resources ./build_xcode/build/Release/luanti.app/Contents/Resources || exit 1
+          diff -rd ./build/macos/luanti.app/Contents/Resources ./build_xcode/luanti.xcarchive/Products/Applications/luanti.app/Contents/Resources || exit 1
