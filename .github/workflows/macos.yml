@@ -10,33 +10,45 @@ jobs:
       - name: Clone Minetest from Codeberg
         run: |
           git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
-          
+
       - name: Clone mcl_localplayer mod
         working-directory: minetest
         run: |
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
-          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf      
-      
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
+
+      # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
+      - name: Remove preinstalled cmake/untap pinned
+        run: |
+          brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
+          brew untap local/pinned || true
+
       - name: Install deps
         working-directory: minetest
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_ANALYTICS: "1"
+        shell: bash
         run: |
+          set -euo pipefail
           source ./util/ci/common.sh
           install_macos_deps
-          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
-          brew uninstall jsoncpp
+          # Avoid header/lib conflicts with Homebrew's jsoncpp
+          brew uninstall jsoncpp || true
 
-      - name: Build with Cmake
+      - name: Build with CMake
         working-directory: minetest
         run: |
-          mkdir build
+          mkdir -p build
           cd build
           cmake .. \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DCMAKE_INSTALL_PREFIX=../build/macos/ \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
             -DENABLE_SYSTEM_JSONCPP=OFF
-          cmake --build . -j$(sysctl -n hw.logicalcpu)
+          cmake --build . -j"$(sysctl -n hw.logicalcpu)"
           make install
 
       - name: Bundle clientmod
@@ -54,8 +66,9 @@ jobs:
           rm -rf macos
           cmake .. -DINSTALL_DEVTEST=FALSE
           cpack -G ZIP -B macos
-      
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: luanti-macos
           path: minetest/build/macos/*.zip
