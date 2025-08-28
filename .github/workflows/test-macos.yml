@@ -1,0 +1,122 @@
+name: Luanti macOS (arm64 from Codeberg, bundle clientmods)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-arm-macos:
+    runs-on: macos-14
+    env:
+      # Change these if you want to pull different forks/mods
+      LUANTI_REPO_URL: https://codeberg.org/halon/Minetest.git
+      LUANTI_DIR: luanti
+      CLIENTMOD_REPO_URL: https://codeberg.org/halon/mcl_localplayer.git
+      CLIENTMOD_DIR: clientmods/mcl_localplayer
+    steps:
+      - name: Prepare workspace
+        uses: actions/checkout@v4
+
+      - name: Clone Luanti from Codeberg
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "$LUANTI_REPO_URL" "$LUANTI_DIR"
+          cd "$LUANTI_DIR"
+          git submodule update --init --recursive || true
+
+      - name: Clone clientmod(s) into Luanti tree
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "$CLIENTMOD_REPO_URL" "$CLIENTMOD_DIR"
+          # Enable the mod by default
+          mkdir -p clientmods
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
+
+      - name: Install build dependencies
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          source ./util/ci/common.sh
+          install_macos_deps
+          # Avoid Homebrew jsoncpp headers/libs conflicting with bundled one
+          brew list jsoncpp >/dev/null 2>&1 && brew uninstall jsoncpp || true
+
+      - name: Configure + build (with devtest for tests)
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cd build
+          cmake .. \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
+            -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
+            -DRUN_IN_PLACE=FALSE \
+            -DENABLE_GETTEXT=TRUE \
+            -DENABLE_SYSTEM_JSONCPP=OFF \
+            -DINSTALL_DEVTEST=TRUE
+          cmake --build . -j"$(sysctl -n hw.logicalcpu)"
+          make install
+
+      - name: Unit tests (arm64)
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}/Library/Application Support/minetest/games/"
+          ln -snf "${PWD}/games/devtest" "${HOME}/Library/Application Support/minetest/games/devtest"
+          ./build/macos/luanti.app/Contents/MacOS/luanti --run-unittests
+
+      - name: Reinstall for packaging (strip devtest)
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          cd build
+          rm -rf ../build/macos
+          cmake .. \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
+            -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
+            -DRUN_IN_PLACE=FALSE \
+            -DENABLE_GETTEXT=TRUE \
+            -DENABLE_SYSTEM_JSONCPP=OFF \
+            -DINSTALL_DEVTEST=FALSE
+          cmake --build . -j"$(sysctl -n hw.logicalcpu)"
+          make install
+
+      - name: Inject clientmods into luanti.app/Contents/Resources
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          APP="build/macos/luanti.app"
+          RES="$APP/Contents/Resources"
+          SRC="clientmods"
+          if [ -d "$SRC" ]; then
+            mkdir -p "$RES/clientmods"
+            rsync -a --delete --exclude '.git*' "$SRC/" "$RES/clientmods/"
+            # Ensure mods.conf exists inside the bundle
+            if [ ! -f "$RES/clientmods/mods.conf" ]; then
+              if [ -f "$SRC/mods.conf" ]; then
+                cp "$SRC/mods.conf" "$RES/clientmods/mods.conf"
+              else
+                printf "# enable mods here\n# load_mod_example = true\n" > "$RES/clientmods/mods.conf"
+              fi
+            fi
+          else
+            echo "No clientmods directory found at ./clientmods; skipping injection."
+          fi
+
+      - name: Package .app (no CPack)
+        working-directory: ${{ env.LUANTI_DIR }}
+        run: |
+          set -euo pipefail
+          OUT="../luanti-macos-arm64.zip"
+          rm -f "$OUT"
+          # ditto preserves permissions and resource forks for macOS bundles
+          ditto -c -k --sequesterRsrc --keepParent "build/macos/luanti.app" "$OUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luanti-macos-arm64
+          path: luanti-macos-arm64.zip
+          if-no-files-found: error
