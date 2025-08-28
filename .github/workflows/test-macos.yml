@@ -7,11 +7,17 @@ jobs:
   build-arm-macos:
     runs-on: macos-14
     env:
-      # Change these if you want to pull different forks/mods
+      # Customize these to point at your forks/mods
       LUANTI_REPO_URL: https://codeberg.org/halon/Minetest.git
       LUANTI_DIR: luanti
       CLIENTMOD_REPO_URL: https://codeberg.org/halon/mcl_localplayer.git
       CLIENTMOD_DIR: clientmods/mcl_localplayer
+
+      # Keep Homebrew quiet/fast and avoid dependency rechecks
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
     steps:
       - name: Prepare workspace
         uses: actions/checkout@v4
@@ -28,9 +34,21 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 "$CLIENTMOD_REPO_URL" "$CLIENTMOD_DIR"
-          # Enable the mod by default
           mkdir -p clientmods
+          # Enable the mod by default (adjust the name to your mod dir)
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
+
+      # Workaround for GitHub macOS runner having a pinned/local cmake that conflicts
+      - name: Work around pinned Homebrew cmake
+        run: |
+          set -euo pipefail
+          # If cmake exists (often from a local/pinned tap), remove it so core cmake can be installed by the deps script
+          if brew list --formula cmake >/dev/null 2>&1; then
+            brew unpin cmake || true
+            brew uninstall --ignore-dependencies --force cmake || true
+          fi
+          # Ensure core tap is present
+          brew tap homebrew/core || true
 
       - name: Install build dependencies
         working-directory: ${{ env.LUANTI_DIR }}
@@ -38,7 +56,7 @@ jobs:
           set -euo pipefail
           source ./util/ci/common.sh
           install_macos_deps
-          # Avoid Homebrew jsoncpp headers/libs conflicting with bundled one
+          # Homebrew jsoncpp causes header/lib conflicts with bundled one
           brew list jsoncpp >/dev/null 2>&1 && brew uninstall jsoncpp || true
 
       - name: Configure + build (with devtest for tests)
@@ -102,7 +120,7 @@ jobs:
               fi
             fi
           else
-            echo "No clientmods directory found at ./clientmods; skipping injection."
+            echo "No ./clientmods directory found; skipping injection."
           fi
 
       - name: Package .app (no CPack)
