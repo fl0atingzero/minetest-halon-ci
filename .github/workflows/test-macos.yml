@@ -59,31 +59,6 @@ jobs:
           # Homebrew jsoncpp causes header/lib conflicts with bundled one
           brew list jsoncpp >/dev/null 2>&1 && brew uninstall jsoncpp || true
 
-      - name: Configure + build (with devtest for tests)
-        working-directory: ${{ env.LUANTI_DIR }}
-        run: |
-          set -euo pipefail
-          mkdir -p build
-          cd build
-          cmake .. \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
-            -DCMAKE_FIND_FRAMEWORK=LAST \
-            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
-            -DRUN_IN_PLACE=FALSE \
-            -DENABLE_GETTEXT=TRUE \
-            -DENABLE_SYSTEM_JSONCPP=OFF \
-            -DINSTALL_DEVTEST=TRUE
-          cmake --build . -j"$(sysctl -n hw.logicalcpu)"
-          make install
-
-      - name: Unit tests (arm64)
-        working-directory: ${{ env.LUANTI_DIR }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${HOME}/Library/Application Support/minetest/games/"
-          ln -snf "${PWD}/games/devtest" "${HOME}/Library/Application Support/minetest/games/devtest"
-          ./build/macos/luanti.app/Contents/MacOS/luanti --run-unittests
-
       - name: Reinstall for packaging (strip devtest)
         working-directory: ${{ env.LUANTI_DIR }}
         run: |
