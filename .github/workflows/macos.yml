@@ -1,0 +1,54 @@
+name: Oldosfan Minetest/Luanti Build (macOS arm64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  macos-arm64:
+    runs-on: macos-14
+    steps:
+      - name: Clone Minetest from Codeberg
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+          
+      - name: Clone mcl_localplayer mod
+        working-directory: minetest
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf      
+      
+      - name: Install deps
+        working-directory: minetest
+        run: |
+          source ./util/ci/common.sh
+          install_macos_deps
+          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
+          brew uninstall jsoncpp
+
+      - name: Build with Cmake
+        working-directory: minetest
+        run: |
+          mkdir build
+          cd build
+          cmake .. \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
+            -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
+            -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DENABLE_SYSTEM_JSONCPP=OFF
+          cmake --build . -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: CPack
+        working-directory: minetest
+        run: |
+          cd build
+          rm -rf macos
+          cmake .. -DINSTALL_DEVTEST=FALSE
+          cpack -G ZIP -B macos
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luanti-macos
+          path: minetest/build/macos/*.zip
+          if-no-files-found: error
