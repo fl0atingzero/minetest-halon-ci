@@ -63,6 +63,7 @@ jobs:
         working-directory: ${{ env.LUANTI_DIR }}
         run: |
           set -euo pipefail
+          mkdir -p build
           cd build
           rm -rf ../build/macos
           cmake .. \
