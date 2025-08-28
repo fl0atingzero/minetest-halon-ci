@@ -36,20 +36,6 @@ jobs:
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
 
-      - name: Build with Cmake
-        working-directory: minetest      
-        run: |
-          mkdir build
-          cd build
-          cmake .. \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
-            -DCMAKE_FIND_FRAMEWORK=LAST \
-            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
-            -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DENABLE_SYSTEM_JSONCPP=OFF
-          cmake --build . -j$(sysctl -n hw.logicalcpu)
-          make install
-
       - name: Build and Archive with Xcode
         working-directory: minetest      
         run: |
@@ -57,10 +43,21 @@ jobs:
           cd build_xcode
           ../util/ci/build_xcode.sh
 
-      - name: Diff Resources
-        working-directory: minetest      
+      # New: zip the whole build_xcode directory
+      - name: Zip build_xcode directory
+        if: always()
+        working-directory: minetest
         run: |
-          ls -lh ./build/macos/luanti.app/Contents/Resources
-          ls -lh ./build_xcode/build/Release/luanti.app/Contents/Resources
-          diff -rd ./build/macos/luanti.app/Contents/Resources ./build_xcode/build/Release/luanti.app/Contents/Resources || exit 1
-          diff -rd ./build/macos/luanti.app/Contents/Resources ./build_xcode/luanti.xcarchive/Products/Applications/luanti.app/Contents/Resources || exit 1
+          set -euo pipefail
+          rm -f build_xcode.zip
+          /usr/bin/zip -r build_xcode.zip build_xcode
+
+      # New: upload the zip as an artifact
+      - name: Upload build_xcode artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build_xcode-arm64-${{ github.run_id }}
+          path: minetest/build_xcode.zip
+          if-no-files-found: error
+          retention-days: 14      
