@@ -17,8 +17,8 @@ jobs:
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
 
-      # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
-      - name: Remove preinstalled cmake/untap pinned
+      # Avoid brew tap conflict (cmake from local/pinned vs homebrew/core)
+      - name: Remove preinstalled cmake and untap pinned
         run: |
           brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
           brew untap local/pinned || true
@@ -39,33 +39,46 @@ jobs:
       - name: Build with CMake
         working-directory: minetest
         run: |
-          mkdir -p build
-          cd build
-          cmake .. \
+          cmake -S . -B build \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=14 \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_FIND_FRAMEWORK=LAST \
-            -DCMAKE_INSTALL_PREFIX=../build/macos/ \
-            -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DCMAKE_INSTALL_PREFIX="${PWD}/build/macos" \
+            -DRUN_IN_PLACE=FALSE \
+            -DENABLE_GETTEXT=TRUE \
             -DENABLE_SYSTEM_JSONCPP=OFF
-          cmake --build . -j"$(sysctl -n hw.logicalcpu)"
-          make install
+          cmake --build build -j"$(sysctl -n hw.logicalcpu)"
+          cmake --install build
 
-      - name: Bundle clientmod
+      # Create a CPack install script that copies clientmods into the staged app
+      - name: Write CPack install script
         working-directory: minetest
         run: |
-          app="build/macos/luanti.app/Contents/Resources"
-          mkdir -p "$app/clientmods"
-          cp -a clientmods/mcl_localplayer "$app/clientmods/"
-          cp clientmods/mods.conf "$app/clientmods/"
+          cat > cpack_install_clientmods.cmake <<'EOF'
+          # CPack runs this in "install" phase; CMAKE_INSTALL_PREFIX is its staging dir
+          set(APP "${CMAKE_INSTALL_PREFIX}/luanti.app/Contents/Resources")
+          file(MAKE_DIRECTORY "${APP}/clientmods")
+          file(COPY "${CLIENTMOD_SRC}/mcl_localplayer" DESTINATION "${APP}/clientmods")
+          file(COPY "${CLIENTMOD_SRC}/mods.conf"       DESTINATION "${APP}/clientmods")
+          EOF
 
       - name: CPack
         working-directory: minetest
         run: |
           cd build
+          # Clean CPack output dir to avoid stale artifacts in ./build/macos
           rm -rf macos
           cmake .. -DINSTALL_DEVTEST=FALSE
-          cpack -G ZIP -B macos
+          # Inject clientmods during CPack's staged install
+          cpack -G ZIP -B macos \
+            -D CPACK_INSTALL_SCRIPT="${PWD}/../cpack_install_clientmods.cmake" \
+            -D CLIENTMOD_SRC="${PWD}/../clientmods"
+
+      # Optional: quick check that the ZIP contains clientmods
+      - name: Verify packaged clientmods
+        working-directory: minetest
+        run: |
+          unzip -l build/macos/*.zip | grep -E "clientmods/(|.*/)|clientmods/mods\.conf"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
