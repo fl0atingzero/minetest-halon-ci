@@ -43,6 +43,7 @@ jobs:
           CMAKE_SNIPPET
 
       - name: Build and Archive with Xcode
+        working-directory: minetest
         run: |
           mkdir build_xcode
           cd build_xcode
