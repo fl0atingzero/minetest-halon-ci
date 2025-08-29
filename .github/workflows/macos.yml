@@ -24,6 +24,7 @@ jobs:
           brew untap local/pinned || true          
           
       - name: Install deps
+        working-directory: minetest
         run: |
           source ./util/ci/common.sh
           install_macos_deps
