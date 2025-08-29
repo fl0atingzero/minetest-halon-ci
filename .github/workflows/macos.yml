@@ -17,16 +17,6 @@ jobs:
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf    
       
-      - name: Work around GH macOS image's pinned CMake
-        working-directory: minetest
-        run: |
-          set -euo pipefail
-          if brew list --formula cmake >/dev/null 2>&1; then
-            if brew info cmake | grep -q 'local/pinned'; then
-              brew uninstall --force cmake
-            fi
-          fi
-
       - name: Install Dependencies
         shell: bash
         run: |
