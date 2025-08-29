@@ -16,6 +16,16 @@ jobs:
         run: |
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf    
+      
+      - name: Work around GH macOS image's pinned CMake
+        working-directory: minetest
+        run: |
+          set -euo pipefail
+          if brew list --formula cmake >/dev/null 2>&1; then
+            if brew info cmake | grep -q 'local/pinned'; then
+              brew uninstall --force cmake
+            fi
+          fi
 
       - name: Install deps
         working-directory: minetest      
@@ -25,3 +35,25 @@ jobs:
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
 
+      - name: Append clientmods copy to Xcode resources
+        working-directory: minetest
+        run: |
+          cat >> util/xcode/install_resources.cmake <<'CMAKE_SNIPPET'
+          execute_process(
+          	COMMAND ${CMAKE_COMMAND} -E copy_directory
+          	"$ENV{SOURCE_ROOT}/clientmods"
+          	"${RESOURCES_DIR}/clientmods"
+          )
+          CMAKE_SNIPPET
+
+      - name: Build and Archive with Xcode
+        run: |
+          mkdir build_xcode
+          cd build_xcode
+          ../util/ci/build_xcode.sh
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-${{ github.run_id }}
+          path: minetest/build_xcode/build/Release/luanti.app
+          if-no-files-found: error 
