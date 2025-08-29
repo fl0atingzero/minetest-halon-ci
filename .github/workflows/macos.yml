@@ -1,4 +1,4 @@
-name: Oldosfan Minetest/Luanti Build (macOS arm64)
+name: macos-arm64
 
 on:
   workflow_dispatch:
@@ -17,17 +17,6 @@ jobs:
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf    
 
-      - name: Work around pinned Homebrew cmake
-        run: |
-          set -euo pipefail
-          # If cmake exists (often from a local/pinned tap), remove it so core cmake can be installed by the deps script
-          if brew list --formula cmake >/dev/null 2>&1; then
-            brew unpin cmake || true
-            brew uninstall --ignore-dependencies --force cmake || true
-          fi
-          # Ensure core tap is present
-          brew tap homebrew/core || true
-
       - name: Install deps
         working-directory: minetest      
         run: |
@@ -36,28 +25,3 @@ jobs:
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
 
-      - name: Build and Archive with Xcode
-        working-directory: minetest      
-        run: |
-          mkdir build_xcode
-          cd build_xcode
-          ../util/ci/build_xcode.sh
-
-      # New: zip the whole build_xcode directory
-      - name: Zip build_xcode directory
-        if: always()
-        working-directory: minetest
-        run: |
-          set -euo pipefail
-          rm -f build_xcode.zip
-          /usr/bin/zip -r build_xcode.zip build_xcode
-
-      # New: upload the zip as an artifact
-      - name: Upload build_xcode artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build_xcode-arm64-${{ github.run_id }}
-          path: minetest/build_xcode.zip
-          if-no-files-found: error
-          retention-days: 14      
