@@ -27,13 +27,21 @@ jobs:
             fi
           fi
 
-      - name: Install deps
-        working-directory: minetest      
+      - name: Install Dependencies
+        shell: bash
         run: |
-          source ./util/ci/common.sh
-          install_macos_deps
-          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
-          brew uninstall jsoncpp
+          set -euo pipefail
+          pkgs=( gettext freetype gmp jpeg-turbo leveldb libogg libpng libvorbis luajit zstd sdl2 )
+          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+          export HOMEBREW_NO_INSTALL_CLEANUP=1
+          brew update --auto-update
+          brew install --display-times "${pkgs[@]}"
+          if brew ls --formula >/dev/null 2>&1; then
+            brew unlink $(brew ls --formula) || true
+          fi
+          for f in "${pkgs[@]}"; do
+            brew link --overwrite --force "$f" || true
+          done
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
