@@ -32,18 +32,35 @@ jobs:
           cd build_xcode
           ../util/ci/build_xcode.sh
           
-      - name: Pack DMG
+      - name: Pack DMG (nightly with clientmods + readme)
+        id: dmg
+        working-directory: minetest
         run: |
           set -euo pipefail
+
           DMG_NAME="luanti-nightly-${GITHUB_SHA::7}.dmg"
+          STAGE="$(pwd)/dmg_root"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          ditto "build_xcode/build/Release/luanti.app" "$STAGE/luanti.app"
+          mkdir $STAGE/clientmods
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git $STAGE/clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > $STAGE/clientmods/mods.conf
+          cat > "$STAGE/readme.txt" << 'EOF'
+          After moving "luanti.app" into "/Applications" run the following command in the Terminal:
+
+          xattr -dr com.apple.quarantine "/Applications/luanti.app"
+
+          If you want to play with CSM, copy clientmods folder from this DMG to ~/Library/Application\ Support/minetest/ and enable client modding in Luanti settings
+          EOF
+          # Create compressed DMG from the staged contents
           hdiutil create -ov \
             -volname "Luanti Nightly" \
-            -srcfolder "build_xcode/build/Release/luanti.app" \
+            -srcfolder "$STAGE" \
             -format UDZO \
             "$GITHUB_WORKSPACE/$DMG_NAME"
+
           echo "DMG=$DMG_NAME" >> "$GITHUB_OUTPUT"
-        working-directory: minetest
-        id: dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
