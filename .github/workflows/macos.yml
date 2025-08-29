@@ -16,22 +16,19 @@ jobs:
         run: |
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf    
-      
-      - name: Install Dependencies
-        shell: bash
+  
+      # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
+      - name: Remove preinstalled cmake/untap pinned
         run: |
-          set -euo pipefail
-          pkgs=( gettext freetype gmp jpeg-turbo leveldb libogg libpng libvorbis luajit zstd sdl2 )
-          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
-          export HOMEBREW_NO_INSTALL_CLEANUP=1
-          brew update --auto-update
-          brew install --display-times "${pkgs[@]}"
-          if brew ls --formula >/dev/null 2>&1; then
-            brew unlink $(brew ls --formula) || true
-          fi
-          for f in "${pkgs[@]}"; do
-            brew link --overwrite --force "$f" || true
-          done
+          brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
+          brew untap local/pinned || true          
+          
+      - name: Install deps
+        run: |
+          source ./util/ci/common.sh
+          install_macos_deps
+          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
+          brew uninstall jsoncpp
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
