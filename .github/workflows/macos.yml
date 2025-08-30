@@ -7,9 +7,21 @@ jobs:
   build-arm-macos-xcode:
     runs-on: macos-14
     steps:
+      - uses: actions/checkout@v4
       - name: Clone Minetest from Codeberg
         run: |
           git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Apply patch
+        working-directory: minetest
+        run: |
+          git patch ../macos/patch.diff
+
+      - name: Clone mcl_localplayer mod
+        working-directory: minetest
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf            
   
       # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
       - name: Remove preinstalled cmake/untap pinned
@@ -25,42 +37,36 @@ jobs:
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
 
+      - name: Append clientmods copy to Xcode resources
+        working-directory: minetest
+        run: |
+          cat >> util/xcode/install_resources.cmake <<'CMAKE_SNIPPET'
+          execute_process(
+          	COMMAND ${CMAKE_COMMAND} -E copy_directory
+          	"$ENV{SOURCE_ROOT}/clientmods"
+          	"${RESOURCES_DIR}/clientmods"
+          )
+          CMAKE_SNIPPET
+
       - name: Build and Archive with Xcode
         working-directory: minetest
         run: |
           mkdir build_xcode
           cd build_xcode
           ../util/ci/build_xcode.sh
-          
-      - name: Pack DMG (nightly with clientmods + readme)
-        id: dmg
-        working-directory: minetest
+
+      - name: Pack DMG
         run: |
           set -euo pipefail
-
           DMG_NAME="luanti-nightly-${GITHUB_SHA::7}.dmg"
-          STAGE="$(pwd)/dmg_root"
-          rm -rf "$STAGE"
-          mkdir -p "$STAGE"
-          ditto "build_xcode/build/Release/luanti.app" "$STAGE/luanti.app"
-          mkdir $STAGE/clientmods
-          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git $STAGE/clientmods/mcl_localplayer
-          echo "load_mod_mcl_localplayer = true" > $STAGE/clientmods/mods.conf
-          cat > "$STAGE/readme.txt" << 'EOF'
-          After moving "luanti.app" into "/Applications" run the following command in the Terminal:
-
-          xattr -dr com.apple.quarantine "/Applications/luanti.app"
-
-          If you want to play with CSM, copy clientmods folder from this DMG to ~/Library/Application\ Support/minetest/ and enable client modding in Luanti settings
-          EOF
-          # Create compressed DMG from the staged contents
           hdiutil create -ov \
             -volname "Luanti Nightly" \
-            -srcfolder "$STAGE" \
+            -srcfolder "build_xcode/build/Release/luanti.app" \
             -format UDZO \
             "$GITHUB_WORKSPACE/$DMG_NAME"
-
           echo "DMG=$DMG_NAME" >> "$GITHUB_OUTPUT"
+        working-directory: minetest
+        id: dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
