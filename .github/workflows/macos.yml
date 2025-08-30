@@ -15,7 +15,7 @@ jobs:
       - name: Apply patch
         working-directory: minetest
         run: |
-          git patch ../macos/patch.diff
+          git apply ../macos/patch.diff
 
       - name: Clone mcl_localplayer mod
         working-directory: minetest
