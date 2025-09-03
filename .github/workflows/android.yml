@@ -33,7 +33,7 @@ jobs:
       - name: Apply patch
         working-directory: minetest
         run: |
-          git apply ../clientmods_android.diff       
+          git apply ../android/clientmods_android.diff       
 
       - name: Build AAB with Gradle
         # We build an AAB as well for uploading to the the Play Store.
