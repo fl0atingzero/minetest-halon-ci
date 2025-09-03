@@ -35,24 +35,13 @@ jobs:
         run: |
           git apply ../android/clientmods_android.diff       
 
-      - name: Build AAB with Gradle
-        # We build an AAB as well for uploading to the the Play Store.
-        working-directory: minetest
-        run: cd android; ./gradlew bundlerelease
-
       - name: Build APKs with Gradle
         # "assemblerelease" is very fast after "bundlerelease".
         working-directory: minetest
         run: cd android; ./gradlew assembledebug
 
-      - name: Save AAB artifact
+      - name: Save artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Luanti-release.aab
-          path: minetest/android/app/build/outputs/bundle/release/app-release.aab
-
-      - name: Save arm64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Luanti-arm64-v8a.apk
-          path: minetest/android/app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+          name: APK
+          path: minetest/android/app/build/outputs/apk/debug/*.apk
