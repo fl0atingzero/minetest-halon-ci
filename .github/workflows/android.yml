@@ -17,8 +17,15 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
+
+      - name: Download bundletool
+        working-directory: ${{ github.workspace }}
+        run: |
+          BUNDLETOOL_VERSION=1.18.1
+          curl -sSL -o bundletool.jar "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          java -jar bundletool.jar version          
 
       - name: Clone Minetest from Codeberg
         run: |
@@ -35,46 +42,25 @@ jobs:
         run: |
           git apply ../android/clientmods_android.diff
 
-      # Ensure the standard debug keystore exists for later Release signing
-      - name: Ensure debug keystore exists
-        run: |
-          mkdir -p "$HOME/.android"
-          keytool -genkeypair -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -alias luanti \
-            -storetype JKS \
-            -storepass android \
-            -keypass android \
-            -sigalg SHA256withRSA \
-            -keyalg RSA -keysize 2048 -validity 36500 \
-            -dname "CN=Android Debug,O=Android,C=US"
-          ls -l "$HOME/.android/debug.keystore"
-
-      # Point Release signing at the debug keystore
-      # build.gradle reads ../local.properties relative to android/app
-      - name: Configure Release signing with debug keystore
-        working-directory: minetest/android
-        run: |
-          {
-            echo "keystore=$HOME/.android/debug.keystore"
-            echo "keystore.password=android"
-            echo "key=luanti"
-            echo "key.password=android"
-          } > local.properties
-          cat local.properties
-
       - name: Build AAB with Gradle
         # We build an AAB as well for uploading to the Play Store.
         working-directory: minetest
         run: cd android; ./gradlew bundlerelease
 
-      # Convert .aab -> .apks using bundletool, signing with the debug keystore
-      - name: Download bundletool
-        working-directory: ${{ github.workspace }}
+      # Ensure the standard debug keystore exists for later Release signing
+      - name: Ensure debug keystore exists
         run: |
-          BUNDLETOOL_VERSION=1.17.2
-          curl -sSL -o bundletool.jar "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
-          java -jar bundletool.jar version
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -alias androiddebugkey \
+              -storepass android \
+              -keypass android \
+              -keyalg RSA -keysize 2048 -validity 36500 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          ls -l "$HOME/.android/debug.keystore"
 
       - name: Build .apks from .aab
         env:
@@ -89,7 +75,7 @@ jobs:
             --overwrite \
             --ks="$HOME/.android/debug.keystore" \
             --ks-pass="pass:android" \
-            --ks-key-alias="luanti" \
+            --ks-key-alias="androiddebugkey" \
             --key-pass="pass:android"
           ls -lh "$APKS_PATH"
 
