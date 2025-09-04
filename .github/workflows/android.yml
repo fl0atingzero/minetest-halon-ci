@@ -39,15 +39,15 @@ jobs:
       - name: Ensure debug keystore exists
         run: |
           mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -v \
-              -keystore "$HOME/.android/debug.keystore" \
-              -alias androiddebugkey \
-              -storepass android \
-              -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -alias luanti \
+            -storetype JKS \
+            -storepass android \
+            -keypass android \
+            -sigalg SHA256withRSA \
+            -keyalg RSA -keysize 2048 -validity 36500 \
+            -dname "CN=Android Debug,O=Android,C=US"
           ls -l "$HOME/.android/debug.keystore"
 
       # Point Release signing at the debug keystore
@@ -58,7 +58,7 @@ jobs:
           {
             echo "keystore=$HOME/.android/debug.keystore"
             echo "keystore.password=android"
-            echo "key=androiddebugkey"
+            echo "key=luanti"
             echo "key.password=android"
           } > local.properties
           cat local.properties
@@ -89,7 +89,7 @@ jobs:
             --overwrite \
             --ks="$HOME/.android/debug.keystore" \
             --ks-pass="pass:android" \
-            --ks-key-alias="androiddebugkey" \
+            --ks-key-alias="luanti" \
             --key-pass="pass:android"
           ls -lh "$APKS_PATH"
 
