@@ -12,7 +12,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gettext
+          sudo apt-get install -y --no-install-recommends gettext curl
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -64,9 +64,40 @@ jobs:
           cat local.properties
 
       - name: Build AAB with Gradle
-        # We build an AAB as well for uploading to the the Play Store.
+        # We build an AAB as well for uploading to the Play Store.
         working-directory: minetest
         run: cd android; ./gradlew bundlerelease
+
+      # Convert .aab -> .apks using bundletool, signing with the debug keystore
+      - name: Download bundletool
+        working-directory: ${{ github.workspace }}
+        run: |
+          BUNDLETOOL_VERSION=1.17.2
+          curl -sSL -o bundletool.jar "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          java -jar bundletool.jar version
+
+      - name: Build .apks from .aab
+        env:
+          AAB_PATH: minetest/android/app/build/outputs/bundle/release/app-release.aab
+          APKS_PATH: minetest/android/app/build/outputs/bundle/release/luanti.apks
+        run: |
+          ls -lh "$AAB_PATH"
+          java -jar bundletool.jar build-apks \
+            --bundle="$AAB_PATH" \
+            --output="$APKS_PATH" \
+            --mode=universal \
+            --overwrite \
+            --ks="$HOME/.android/debug.keystore" \
+            --ks-pass="pass:android" \
+            --ks-key-alias="androiddebugkey" \
+            --key-pass="pass:android"
+          ls -lh "$APKS_PATH"
+
+      - name: Upload APKS artifact (luanti.apks)
+        uses: actions/upload-artifact@v4
+        with:
+          name: luanti.apks
+          path: minetest/android/app/build/outputs/bundle/release/luanti.apks
 
       - name: Save AAB artifact
         uses: actions/upload-artifact@v4
