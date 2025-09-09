@@ -6,6 +6,16 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-22.04
+    env:
+      # Common paths
+      AAB_PATH: minetest/android/app/build/outputs/bundle/release/app-release.aab
+      APKS_PATH: minetest/android/app/build/outputs/bundle/release/luanti.apks
+      KEYSTORE_PATH: ${{ runner.temp }}/upload.keystore
+      # Secrets
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,12 +30,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Restore release keystore from secret
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          ls -l "$KEYSTORE_PATH"
+
       - name: Download bundletool
         working-directory: ${{ github.workspace }}
         run: |
           BUNDLETOOL_VERSION=1.18.1
           curl -sSL -o bundletool.jar "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
-          java -jar bundletool.jar version          
+          java -jar bundletool.jar version
 
       - name: Clone Minetest from Codeberg
         run: |
@@ -43,29 +59,20 @@ jobs:
           git apply ../android/clientmods_android.diff
 
       - name: Build AAB with Gradle
-        # We build an AAB as well for uploading to the Play Store.
+        # Builds the Release AAB (may be unsigned by Gradle; we sign it next)
         working-directory: minetest
         run: cd android; ./gradlew bundlerelease
 
-      # Ensure the standard debug keystore exists for later Release signing
-      - name: Ensure debug keystore exists
+      - name: Sign AAB with release (upload) key
         run: |
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$HOME/.android/debug.keystore" ]; then
-            keytool -genkeypair -v \
-              -keystore "$HOME/.android/debug.keystore" \
-              -alias androiddebugkey \
-              -storepass android \
-              -keypass android \
-              -keyalg RSA -keysize 2048 -validity 36500 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
-          ls -l "$HOME/.android/debug.keystore"
+          jarsigner -keystore "$KEYSTORE_PATH" \
+            -storepass "$STORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            "$AAB_PATH" "$KEY_ALIAS"
+          # Verify signature
+          jarsigner -verify -verbose -certs "$AAB_PATH"
 
-      - name: Build .apks from .aab
-        env:
-          AAB_PATH: minetest/android/app/build/outputs/bundle/release/app-release.aab
-          APKS_PATH: minetest/android/app/build/outputs/bundle/release/luanti.apks
+      - name: Build .apks from .aab using the same key
         run: |
           ls -lh "$AAB_PATH"
           java -jar bundletool.jar build-apks \
@@ -73,20 +80,20 @@ jobs:
             --output="$APKS_PATH" \
             --mode=universal \
             --overwrite \
-            --ks="$HOME/.android/debug.keystore" \
-            --ks-pass="pass:android" \
-            --ks-key-alias="androiddebugkey" \
-            --key-pass="pass:android"
+            --ks="$KEYSTORE_PATH" \
+            --ks-pass="pass:$STORE_PASSWORD" \
+            --ks-key-alias="$KEY_ALIAS" \
+            --key-pass="pass:$KEY_PASSWORD"
           ls -lh "$APKS_PATH"
 
       - name: Upload APKS artifact (luanti.apks)
         uses: actions/upload-artifact@v4
         with:
           name: luanti.apks
-          path: minetest/android/app/build/outputs/bundle/release/luanti.apks
+          path: ${{ env.APKS_PATH }}
 
       - name: Save AAB artifact
         uses: actions/upload-artifact@v4
         with:
           name: Luanti-release.aab
-          path: minetest/android/app/build/outputs/bundle/release/app-release.aab
+          path: ${{ env.AAB_PATH }}
