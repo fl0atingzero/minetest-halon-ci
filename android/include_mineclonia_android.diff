@@ -1,0 +1,17 @@
+diff --git a/android/app/build.gradle b/android/app/build.gradle
+index eaf1e3571..049272be6 100644
+--- a/android/app/build.gradle
++++ b/android/app/build.gradle
+@@ -87,6 +87,12 @@ task prepareAssets() {
+ 		copy {
+ 			from "${projRoot}/textures/base/pack" into "${assetsFolder}/textures/base/pack"
+ 		}
++		copy {
++			from "${projRoot}/clientmods" into "${assetsFolder}/clientmods"
++		}
++				copy {
++			from "${projRoot}/games" into "${assetsFolder}/games"
++		}
+ 
+ 		// compile translations
+ 		fileTree("${projRoot}/po").include("**/*.po").grep {
