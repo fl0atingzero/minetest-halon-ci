@@ -59,7 +59,7 @@ jobs:
       - name: Clone mineclonia (mineclonia_mapgen branch)
         working-directory: minetest
         run: |
-          mkdir games
+          mkdir -p games
           cd games
           git clone --depth 1 --single-branch --branch mineclonia_mapgen https://codeberg.org/mineclonia/mineclonia.git
 
