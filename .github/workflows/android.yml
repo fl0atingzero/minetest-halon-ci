@@ -7,11 +7,7 @@ jobs:
   build-android:
     runs-on: ubuntu-22.04
     env:
-      # Common paths
-      AAB_PATH: minetest/android/app/build/outputs/bundle/release/app-release.aab
-      APKS_PATH: minetest/android/app/build/outputs/bundle/release/luanti.apks
-      KEYSTORE_PATH: ${{ runner.temp }}/upload.keystore
-      # Secrets
+      # Secrets are fine to keep here
       KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -30,6 +26,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # New: define paths using RUNNER_TEMP and export to the job env
+      - name: Define build paths
+        shell: bash
+        run: |
+          echo "AAB_PATH=minetest/android/app/build/outputs/bundle/release/app-release.aab" >> "$GITHUB_ENV"
+          echo "APKS_PATH=minetest/android/app/build/outputs/bundle/release/luanti.apks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+
       - name: Restore release keystore from secret
         shell: bash
         run: |
@@ -37,7 +41,6 @@ jobs:
           ls -l "$KEYSTORE_PATH"
 
       - name: Download bundletool
-        working-directory: ${{ github.workspace }}
         run: |
           BUNDLETOOL_VERSION=1.18.1
           curl -sSL -o bundletool.jar "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
@@ -59,7 +62,6 @@ jobs:
           git apply ../android/clientmods_android.diff
 
       - name: Build AAB with Gradle
-        # Builds the Release AAB (may be unsigned by Gradle; we sign it next)
         working-directory: minetest
         run: cd android; ./gradlew bundlerelease
 
@@ -69,7 +71,6 @@ jobs:
             -storepass "$STORE_PASSWORD" \
             -keypass "$KEY_PASSWORD" \
             "$AAB_PATH" "$KEY_ALIAS"
-          # Verify signature
           jarsigner -verify -verbose -certs "$AAB_PATH"
 
       - name: Build .apks from .aab using the same key
