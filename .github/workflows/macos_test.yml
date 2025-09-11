@@ -8,9 +8,9 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Clone Minetest from Codeberg
+      - name: Clone luanti from github
         run: |
-          git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+          git clone --depth 1 https://github.com/luanti-org/luanti.git minetest
           
   
       # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
