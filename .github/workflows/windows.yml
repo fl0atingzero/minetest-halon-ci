@@ -1,4 +1,4 @@
-name: windows-amd64-mingw
+name: windows-mingw
 
 on:
   workflow_dispatch:
@@ -10,18 +10,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bits: [64]
+        bits: [32,64]
     steps:
       - name: Install dependencies
         run: |
-          sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gettext unzip wine wine${{ matrix.bits }}
+            gettext unzip
 
       - name: Clone Minetest from Codeberg
         run: |
           git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Get Minetest commit
+        id: mtsha
+        working-directory: minetest
+        shell: bash
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"        
 
       - name: Install MinGW toolchain
         working-directory: minetest
@@ -37,7 +42,8 @@ jobs:
       - name: Build
         working-directory: minetest
         run: |
-          EXISTING_MINETEST_DIR=$PWD ./util/buildbot/buildwin${{ matrix.bits }}.sh B
+          EXISTING_MINETEST_DIR=$PWD \
+          ./util/buildbot/buildwin${{ matrix.bits }}.sh B
 
       - name: Runtime test
         working-directory: minetest
@@ -50,6 +56,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "windows-mingw${{ matrix.bits }}-${{ github.run_id }}"
+          name: "luanti-windows-mingw${{ matrix.bits }}-nightly-${{ steps.mtsha.outputs.sha }}"
           path: minetest/B/build/*.zip
           if-no-files-found: error

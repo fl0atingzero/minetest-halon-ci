@@ -12,6 +12,12 @@ jobs:
         run: |
           git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
 
+      - name: Get Minetest commit
+        id: mtsha
+        working-directory: minetest
+        shell: bash
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"             
+
       - name: Apply patch
         working-directory: minetest
         run: |
@@ -75,22 +81,28 @@ jobs:
           xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
 
       - name: Pack DMG
+        env:
+          MT_SHA: ${{ steps.mtsha.outputs.sha }}
         run: |
           set -euo pipefail
-          DMG_NAME="luanti-arm64-nightly-${GITHUB_SHA::7}.dmg"
+          BASENAME="luanti-macos-arm64-nightly-${MT_SHA}"
+          DMG_NAME="${BASENAME}.dmg"
           hdiutil create -ov \
             -volname "Luanti Nightly" \
             -srcfolder "build_xcode/build/Release/luanti.app" \
             -format UDZO \
             "$GITHUB_WORKSPACE/$DMG_NAME"
-          echo "DMG=$DMG_NAME" >> "$GITHUB_OUTPUT"
+          {
+            echo "DMG=$DMG_NAME"
+            echo "BASENAME=$BASENAME"
+          } >> "$GITHUB_OUTPUT"
         working-directory: minetest
         id: dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.dmg.outputs.DMG }}
+          name: ${{ steps.dmg.outputs.BASENAME }}
           path: ${{ github.workspace }}/${{ steps.dmg.outputs.DMG }}
           if-no-files-found: error
 
@@ -101,6 +113,12 @@ jobs:
       - name: Clone Minetest from Codeberg
         run: |
           git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Get Minetest commit
+        id: mtsha
+        working-directory: minetest
+        shell: bash
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"             
 
       - name: Apply patch
         working-directory: minetest
@@ -152,6 +170,7 @@ jobs:
 
           cmake .. \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
@@ -174,25 +193,34 @@ jobs:
             -DJPEG_LIBRARY="$JPEG_PREFIX/lib/libjpeg.a" \
             -DPNG_LIBRARY="$PNG_PREFIX/lib/libpng.a" \
             -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
+            -DCMAKE_XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME=YES \
+            -DXCODE_CODE_SIGN_ENTITLEMENTS=../../macos/mod.entitlements \
             -GXcode
           xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
 
       - name: Pack DMG
         run: |
           set -euo pipefail
-          DMG_NAME="luanti-intel-nightly-${GITHUB_SHA::7}.dmg"
+          BASENAME="luanti-macos-x86_64-nightly-${MT_SHA}"
+          DMG_NAME="${BASENAME}.dmg"
           hdiutil create -ov \
             -volname "Luanti Nightly" \
             -srcfolder "build_xcode/build/Release/luanti.app" \
             -format UDZO \
             "$GITHUB_WORKSPACE/$DMG_NAME"
           echo "DMG=$DMG_NAME" >> "$GITHUB_OUTPUT"
+          {
+            echo "DMG=$DMG_NAME"
+            echo "BASENAME=$BASENAME"
+          } >> "$GITHUB_OUTPUT"          
         working-directory: minetest
         id: dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.dmg.outputs.DMG }}
+          name: ${{ steps.dmg.outputs.BASENAME }}
           path: ${{ github.workspace }}/${{ steps.dmg.outputs.DMG }}
           if-no-files-found: error

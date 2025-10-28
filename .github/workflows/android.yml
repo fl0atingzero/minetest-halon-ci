@@ -50,6 +50,12 @@ jobs:
         run: |
           git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
 
+      - name: Get Minetest commit
+        id: mtsha
+        working-directory: minetest
+        shell: bash
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"             
+
       - name: Clone mcl_localplayer mod
         working-directory: minetest
         run: |
@@ -90,11 +96,118 @@ jobs:
       - name: Upload APKS artifact (luanti.apks)
         uses: actions/upload-artifact@v4
         with:
-          name: luanti.apks
+          name: "luanti-android-nightly-release-${{ steps.mtsha.outputs.sha }}.apks"
           path: ${{ env.APKS_PATH }}
 
       - name: Save AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Luanti-release.aab
+          name: "luanti-android-nightly-release-${{ steps.mtsha.outputs.sha }}.aab"
+          path: ${{ env.AAB_PATH }}
+  build-android-mineclonia:
+    runs-on: ubuntu-22.04
+    env:
+      # Secrets are fine to keep here
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gettext curl
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # New: define paths using RUNNER_TEMP and export to the job env
+      - name: Define build paths
+        shell: bash
+        run: |
+          echo "AAB_PATH=minetest/android/app/build/outputs/bundle/release/app-release.aab" >> "$GITHUB_ENV"
+          echo "APKS_PATH=minetest/android/app/build/outputs/bundle/release/luanti.apks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+
+      - name: Restore release keystore from secret
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          ls -l "$KEYSTORE_PATH"
+
+      - name: Download bundletool
+        run: |
+          BUNDLETOOL_VERSION=1.18.1
+          curl -sSL -o bundletool.jar "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          java -jar bundletool.jar version
+
+      - name: Clone Minetest from Codeberg
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Get Minetest commit
+        id: mtsha
+        working-directory: minetest
+        shell: bash
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"          
+
+      - name: Clone mcl_localplayer mod
+        working-directory: minetest
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
+
+      - name: Clone mineclonia
+        working-directory: minetest
+        run: |
+          mkdir -p games
+          cd games
+          git clone --depth 1 --single-branch --branch main https://codeberg.org/mineclonia/mineclonia.git
+
+      - name: Apply patch
+        working-directory: minetest
+        run: |
+          git apply ../android/include_mineclonia_android.diff
+
+      - name: Build AAB with Gradle
+        working-directory: minetest
+        run: cd android; ./gradlew bundlerelease
+
+      - name: Sign AAB with release (upload) key
+        run: |
+          jarsigner -keystore "$KEYSTORE_PATH" \
+            -storepass "$STORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            "$AAB_PATH" "$KEY_ALIAS"
+          jarsigner -verify -verbose -certs "$AAB_PATH"
+
+      - name: Build .apks from .aab using the same key
+        run: |
+          ls -lh "$AAB_PATH"
+          java -jar bundletool.jar build-apks \
+            --bundle="$AAB_PATH" \
+            --output="$APKS_PATH" \
+            --mode=universal \
+            --overwrite \
+            --ks="$KEYSTORE_PATH" \
+            --ks-pass="pass:$STORE_PASSWORD" \
+            --ks-key-alias="$KEY_ALIAS" \
+            --key-pass="pass:$KEY_PASSWORD"
+          ls -lh "$APKS_PATH"
+
+      - name: Upload APKS artifact (luanti.apks)
+        uses: actions/upload-artifact@v4
+        with:
+          name: "luanti-mineclonia-android-nightly-release-${{ steps.mtsha.outputs.sha }}.apks"
+          path: ${{ env.APKS_PATH }}
+
+      - name: Save AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: "luanti-mineclonia-android-nightly-release-${{ steps.mtsha.outputs.sha }}.aab"
           path: ${{ env.AAB_PATH }}
