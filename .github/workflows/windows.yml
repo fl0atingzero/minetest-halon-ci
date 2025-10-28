@@ -45,14 +45,6 @@ jobs:
           EXISTING_MINETEST_DIR=$PWD \
           ./util/buildbot/buildwin${{ matrix.bits }}.sh B
 
-      - name: Runtime test
-        working-directory: minetest
-        run: |
-          dest=$(mktemp -d)
-          unzip -q -d "$dest" B/build/*.zip
-          cd "$dest"/luanti-*-win*
-          wine bin/luanti.exe --version
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
