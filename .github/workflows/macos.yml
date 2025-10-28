@@ -143,25 +143,40 @@ jobs:
         run: |
           mkdir build_xcode
           cd build_xcode
+
+          BREW_PREFIX="$(brew --prefix)"
+          SDL2_PREFIX="$(brew --prefix sdl2)"
+          FREETYPE_PREFIX="$(brew --prefix freetype)"
+          GETTEXT_PREFIX="$(brew --prefix gettext)"
+          LUAJIT_PREFIX="$(brew --prefix luajit)"
+          OGG_PREFIX="$(brew --prefix libogg)"
+          VORBIS_PREFIX="$(brew --prefix libvorbis)"
+          ZSTD_PREFIX="$(brew --prefix zstd)"
+          GMP_PREFIX="$(brew --prefix gmp)"
+          JPEG_PREFIX="$(brew --prefix jpeg)"
+          PNG_PREFIX="$(brew --prefix libpng)"
+
           cmake .. \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DUSE_SDL2_STATIC=TRUE \
-            -DSDL2_INCLUDE_DIRS=/opt/homebrew/include/SDL2 \
-            -DFREETYPE_LIBRARY=/opt/homebrew/lib/libfreetype.a \
-            -DGETTEXT_INCLUDE_DIR=/opt/homebrew/include \
-            -DGETTEXT_LIBRARY=/opt/homebrew/lib/libintl.a \
-            -DLUA_LIBRARY=/opt/homebrew/lib/libluajit-5.1.a \
-            -DOGG_LIBRARY=/opt/homebrew/lib/libogg.a \
-            -DVORBIS_LIBRARY=/opt/homebrew/lib/libvorbis.a \
-            -DVORBISFILE_LIBRARY=/opt/homebrew/lib/libvorbisfile.a \
-            -DZSTD_LIBRARY=/opt/homebrew/lib/libzstd.a \
-            -DGMP_LIBRARY=/opt/homebrew/lib/libgmp.a \
+            -DSDL2_INCLUDE_DIRS="$SDL2_PREFIX/include/SDL2" \
+            -DFREETYPE_LIBRARY="$FREETYPE_PREFIX/lib/libfreetype.a" \
+            -DGETTEXT_INCLUDE_DIR="$GETTEXT_PREFIX/include" \
+            -DGETTEXT_LIBRARY="$GETTEXT_PREFIX/lib/libintl.a" \
+            -DLUA_LIBRARY="$LUAJIT_PREFIX/lib/libluajit-5.1.a" \
+            -DOGG_LIBRARY="$OGG_PREFIX/lib/libogg.a" \
+            -DVORBIS_LIBRARY="$VORBIS_PREFIX/lib/libvorbis.a" \
+            -DVORBISFILE_LIBRARY="$VORBIS_PREFIX/lib/libvorbisfile.a" \
+            -DZSTD_LIBRARY="$ZSTD_PREFIX/lib/libzstd.a" \
+            -DZSTD_INCLUDE_DIR="$ZSTD_PREFIX/include" \
+            -DGMP_LIBRARY="$GMP_PREFIX/lib/libgmp.a" \
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
-            -DJPEG_LIBRARY=/opt/homebrew/lib/libjpeg.a \
-            -DPNG_LIBRARY=/opt/homebrew/lib/libpng.a \
+            -DJPEG_LIBRARY="$JPEG_PREFIX/lib/libjpeg.a" \
+            -DPNG_LIBRARY="$PNG_PREFIX/lib/libpng.a" \
             -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
             -GXcode
           xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
