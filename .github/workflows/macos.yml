@@ -101,7 +101,7 @@ jobs:
           if-no-files-found: error
 
   build-intel-macos-xcode:
-    runs-on: macos-14-large
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       - name: Clone Minetest from Codeberg
