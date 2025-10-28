@@ -153,7 +153,7 @@ jobs:
           VORBIS_PREFIX="$(brew --prefix libvorbis)"
           ZSTD_PREFIX="$(brew --prefix zstd)"
           GMP_PREFIX="$(brew --prefix gmp)"
-          JPEG_PREFIX="$(brew --prefix jpeg)"
+          JPEG_PREFIX="$(brew --prefix jpeg-turbo)"
           PNG_PREFIX="$(brew --prefix libpng)"
 
           cmake .. \
@@ -175,6 +175,7 @@ jobs:
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
+            -DJPEG_INCLUDE_DIR="$JPEG_PREFIX/include" \ 
             -DJPEG_LIBRARY="$JPEG_PREFIX/lib/libjpeg.a" \
             -DPNG_LIBRARY="$PNG_PREFIX/lib/libpng.a" \
             -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
