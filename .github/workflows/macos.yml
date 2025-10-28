@@ -175,7 +175,7 @@ jobs:
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
-            -DJPEG_INCLUDE_DIR="$JPEG_PREFIX/include" \ 
+            -DJPEG_INCLUDE_DIR="$JPEG_PREFIX/include" \
             -DJPEG_LIBRARY="$JPEG_PREFIX/lib/libjpeg.a" \
             -DPNG_LIBRARY="$PNG_PREFIX/lib/libpng.a" \
             -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
