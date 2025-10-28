@@ -1,4 +1,4 @@
-name: macos-arm64
+name: macos
 
 on:
   workflow_dispatch:
@@ -56,6 +56,8 @@ jobs:
           cmake .. \
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DUSE_SDL2_STATIC=TRUE \
+            -DSDL2_INCLUDE_DIRS=/opt/homebrew/include/SDL2 \
             -DFREETYPE_LIBRARY=/opt/homebrew/lib/libfreetype.a \
             -DGETTEXT_INCLUDE_DIR=/opt/homebrew/include \
             -DGETTEXT_LIBRARY=/opt/homebrew/lib/libintl.a \
@@ -81,7 +83,103 @@ jobs:
       - name: Pack DMG
         run: |
           set -euo pipefail
-          DMG_NAME="luanti-nightly-${GITHUB_SHA::7}.dmg"
+          DMG_NAME="luanti-arm64-nightly-${GITHUB_SHA::7}.dmg"
+          hdiutil create -ov \
+            -volname "Luanti Nightly" \
+            -srcfolder "build_xcode/build/Release/luanti.app" \
+            -format UDZO \
+            "$GITHUB_WORKSPACE/$DMG_NAME"
+          echo "DMG=$DMG_NAME" >> "$GITHUB_OUTPUT"
+        working-directory: minetest
+        id: dmg
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dmg.outputs.DMG }}
+          path: ${{ github.workspace }}/${{ steps.dmg.outputs.DMG }}
+          if-no-files-found: error
+
+  build-intel-macos-xcode:
+    runs-on: macos-14-large
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone Minetest from Codeberg
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Apply patch
+        working-directory: minetest
+        run: |
+          git apply ../macos/patch.diff
+
+      - name: Clone mcl_localplayer mod
+        working-directory: minetest
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf            
+  
+      # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
+      - name: Remove preinstalled cmake/untap pinned
+        run: |
+          brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
+          brew untap local/pinned || true          
+          
+      - name: Install deps
+        working-directory: minetest
+        run: |
+          source ./util/ci/common.sh
+          install_macos_deps
+          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
+          brew uninstall jsoncpp
+
+      - name: Append clientmods copy to Xcode resources
+        working-directory: minetest
+        run: |
+          cat >> util/xcode/install_resources.cmake <<'CMAKE_SNIPPET'
+          execute_process(
+          	COMMAND ${CMAKE_COMMAND} -E copy_directory
+          	"$ENV{SOURCE_ROOT}/clientmods"
+          	"${RESOURCES_DIR}/clientmods"
+          )
+          CMAKE_SNIPPET
+
+      - name: Build and Archive with Xcode
+        working-directory: minetest
+        run: |
+          mkdir build_xcode
+          cd build_xcode
+          cmake .. \
+            -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DUSE_SDL2_STATIC=TRUE \
+            -DSDL2_INCLUDE_DIRS=/opt/homebrew/include/SDL2 \
+            -DFREETYPE_LIBRARY=/opt/homebrew/lib/libfreetype.a \
+            -DGETTEXT_INCLUDE_DIR=/opt/homebrew/include \
+            -DGETTEXT_LIBRARY=/opt/homebrew/lib/libintl.a \
+            -DLUA_LIBRARY=/opt/homebrew/lib/libluajit-5.1.a \
+            -DOGG_LIBRARY=/opt/homebrew/lib/libogg.a \
+            -DVORBIS_LIBRARY=/opt/homebrew/lib/libvorbis.a \
+            -DVORBISFILE_LIBRARY=/opt/homebrew/lib/libvorbisfile.a \
+            -DZSTD_LIBRARY=/opt/homebrew/lib/libzstd.a \
+            -DGMP_LIBRARY=/opt/homebrew/lib/libgmp.a \
+            -DENABLE_LEVELDB=OFF \
+            -DENABLE_POSTGRESQL=OFF \
+            -DENABLE_REDIS=OFF \
+            -DJPEG_LIBRARY=/opt/homebrew/lib/libjpeg.a \
+            -DPNG_LIBRARY=/opt/homebrew/lib/libpng.a \
+            -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
+            -DCMAKE_XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME=YES \
+            -DXCODE_CODE_SIGN_ENTITLEMENTS=../misc/macos/entitlements/release_map_jit.entitlements \
+            -GXcode
+          xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
+
+      - name: Pack DMG
+        run: |
+          set -euo pipefail
+          DMG_NAME="luanti-intel-nightly-${GITHUB_SHA::7}.dmg"
           hdiutil create -ov \
             -volname "Luanti Nightly" \
             -srcfolder "build_xcode/build/Release/luanti.app" \
