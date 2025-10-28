@@ -5,7 +5,7 @@ on:
 
 jobs:
   mingw:
-    name: "MinGW cross-compiler (${{ matrix.bits }}-bit)"
+    name: "build-windows-mingw${{ matrix.bits }}"
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false

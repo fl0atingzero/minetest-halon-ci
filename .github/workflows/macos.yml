@@ -201,6 +201,8 @@ jobs:
           xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
 
       - name: Pack DMG
+        env:
+          MT_SHA: ${{ steps.mtsha.outputs.sha }}
         run: |
           set -euo pipefail
           BASENAME="luanti-macos-x86_64-nightly-${MT_SHA}"
