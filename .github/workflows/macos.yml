@@ -161,6 +161,7 @@ jobs:
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DUSE_SDL2_STATIC=TRUE \
             -DSDL2_INCLUDE_DIRS="$SDL2_PREFIX/include/SDL2" \
             -DFREETYPE_LIBRARY="$FREETYPE_PREFIX/lib/libfreetype.a" \
             -DGETTEXT_INCLUDE_DIR="$GETTEXT_PREFIX/include" \
