@@ -56,8 +56,6 @@ jobs:
           cmake .. \
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DUSE_SDL2_STATIC=TRUE \
-            -DSDL2_INCLUDE_DIRS=/opt/homebrew/include/SDL2 \
             -DFREETYPE_LIBRARY=/opt/homebrew/lib/libfreetype.a \
             -DGETTEXT_INCLUDE_DIR=/opt/homebrew/include \
             -DGETTEXT_LIBRARY=/opt/homebrew/lib/libintl.a \
@@ -67,7 +65,6 @@ jobs:
             -DVORBISFILE_LIBRARY=/opt/homebrew/lib/libvorbisfile.a \
             -DZSTD_LIBRARY=/opt/homebrew/lib/libzstd.a \
             -DGMP_LIBRARY=/opt/homebrew/lib/libgmp.a \
-            -DENABLE_SYSTEM_JSONCPP=OFF \
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
@@ -77,7 +74,7 @@ jobs:
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
             -DCMAKE_XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME=YES \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS=$PWD/../misc/macos/entitlements/release_map_jit.entitlements \
+            -DXCODE_CODE_SIGN_ENTITLEMENTS=../misc/macos/entitlements/release_map_jit.entitlements \
             -GXcode
           xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
 
