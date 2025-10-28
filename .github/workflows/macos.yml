@@ -23,12 +23,6 @@ jobs:
           git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
           echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf            
   
-      # Workaround: avoid brew tap conflict (cmake from local/pinned vs core)
-      - name: Remove preinstalled cmake/untap pinned
-        run: |
-          brew list --formula | grep -q '^cmake$' && brew uninstall --ignore-dependencies cmake || true
-          brew untap local/pinned || true          
-          
       - name: Install deps
         working-directory: minetest
         run: |
@@ -76,7 +70,7 @@ jobs:
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
             -DCMAKE_XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME=YES \
-            -DXCODE_CODE_SIGN_ENTITLEMENTS=../misc/macos/entitlements/release_map_jit.entitlements \
+            -DXCODE_CODE_SIGN_ENTITLEMENTS=../../macos/mod.entitlements \
             -GXcode
           xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
 
