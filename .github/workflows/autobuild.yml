@@ -32,7 +32,14 @@ jobs:
   collect-and-release:
     needs: [android, macos, windows]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions:  read
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Prepare dist
         run: mkdir -p dist
 
@@ -63,54 +70,39 @@ jobs:
           find dist -maxdepth 1 -type f -printf '%f\n' | sort
 
       - name: Remove old assets from 'nightly' (if any)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           tag="nightly"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release '$tag' exists, deleting old assets..."
-            if gh release view "$tag" --json assets -q '.assets | length' | grep -q '^[1-9]'; then
-              gh release view "$tag" --json assets -q '.assets[].name' | while read -r name; do
-                echo "Deleting asset: $name"
-                gh release delete-asset "$tag" "$name" -y || {
-                  rid=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$tag" --jq '.assets[] | select(.name=="'"$name"'") | .id' || true)
-                  if [[ -n "$rid" ]]; then
-                    echo "Deleting via REST asset id=$rid"
-                    gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$rid"
-                  fi
-                }
-              done
+            ids=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$tag" --jq '.assets[].id' || true)
+            if [[ -n "$ids" ]]; then
+              while read -r id; do
+                [[ -z "$id" ]] && continue
+                echo "Deleting asset id=$id"
+                gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$id"
+              done <<< "$ids"
             fi
           else
-            echo "Release '$tag' not found, will create fresh."
+            echo "Release '$tag' not found; will create fresh."
           fi
 
       - name: Create or update 'nightly' release (mark as latest)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           tag="nightly"
           title="Nightly build $(date -u +'%Y-%m-%d %H:%M UTC')"
-
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release edit "$tag" --title "$title" --latest
           else
-            gh release create "$tag" --title "$title" --notes "Automated nightly build" --latest --target "$GITHUB_SHA"
+            gh release create "$tag" \
+              --title "$title" \
+              --notes "Automated nightly build" \
+              --latest \
+              --target "$GITHUB_SHA"
           fi
 
-      - name: Generate release notes
-        run: |
-          {
-            echo "Artifacts:"
-            find dist -maxdepth 1 -type f -printf ' - %f\n' | sort
-          } > notes.md
-          cat notes.md
-
       - name: Upload fresh assets (clobber same names)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -119,4 +111,4 @@ jobs:
             echo "No artifacts found in dist/"; exit 1
           fi
           gh release upload nightly "${files[@]}" --clobber
-          gh release edit nightly --notes-file notes.md --latest
+          gh release edit nightly --latest
