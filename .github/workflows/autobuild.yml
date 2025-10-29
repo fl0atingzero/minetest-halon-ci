@@ -1,0 +1,121 @@
+name: autobuild-all
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why run all?
+        required: false
+        type: string
+  schedule:
+    - cron: "0 0 */2 * *"
+
+permissions:
+  contents: write
+  actions:  read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  android:
+    uses: ./.github/workflows/android.yml
+
+  macos:
+    uses: ./.github/workflows/macos.yml
+
+  windows:
+    uses: ./.github/workflows/windows.yml
+
+  collect-and-release:
+    needs: [android, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare dist
+        run: mkdir -p dist
+
+      - name: Download artifacts (android)
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ needs.android.outputs.run_id }}
+          path: dist
+          merge-multiple: true
+
+      - name: Download artifacts (macOS)
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ needs.macos.outputs.run_id }}
+          path: dist
+          merge-multiple: true
+
+      - name: Download artifacts (Windows)
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ needs.windows.outputs.run_id }}
+          path: dist
+          merge-multiple: true
+
+      - name: List collected files
+        run: |
+          echo "Collected files:"
+          find dist -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Remove old assets from 'nightly' (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="nightly"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release '$tag' exists, deleting old assets..."
+            if gh release view "$tag" --json assets -q '.assets | length' | grep -q '^[1-9]'; then
+              gh release view "$tag" --json assets -q '.assets[].name' | while read -r name; do
+                echo "Deleting asset: $name"
+                gh release delete-asset "$tag" "$name" -y || {
+                  rid=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$tag" --jq '.assets[] | select(.name=="'"$name"'") | .id' || true)
+                  if [[ -n "$rid" ]]; then
+                    echo "Deleting via REST asset id=$rid"
+                    gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$rid"
+                  fi
+                }
+              done
+            fi
+          else
+            echo "Release '$tag' not found, will create fresh."
+          fi
+
+      - name: Create or update 'nightly' release (mark as latest)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="nightly"
+          title="Nightly build $(date -u +'%Y-%m-%d %H:%M UTC')"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$title" --latest
+          else
+            gh release create "$tag" --title "$title" --notes "Automated nightly build" --latest --target "$GITHUB_SHA"
+          fi
+
+      - name: Generate release notes
+        run: |
+          {
+            echo "Artifacts:"
+            find dist -maxdepth 1 -type f -printf ' - %f\n' | sort
+          } > notes.md
+          cat notes.md
+
+      - name: Upload fresh assets (clobber same names)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(dist/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No artifacts found in dist/"; exit 1
+          fi
+          gh release upload nightly "${files[@]}" --clobber
+          gh release edit nightly --notes-file notes.md --latest

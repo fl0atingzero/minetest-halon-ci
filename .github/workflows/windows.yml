@@ -2,6 +2,11 @@ name: windows
 
 on:
   workflow_dispatch:
+  workflow_call:
+    outputs:
+      run_id:
+        description: "Run ID of this reusable workflow call"
+        value: ${{ jobs.meta.outputs.run_id }}
 
 jobs:
   mingw:
@@ -51,3 +56,11 @@ jobs:
           name: "luanti-windows-mingw${{ matrix.bits }}-nightly-${{ steps.mtsha.outputs.sha }}"
           path: minetest/B/build/*.zip
           if-no-files-found: error
+
+  meta:
+    runs-on: ubuntu-22.04
+    outputs:
+      run_id: ${{ steps.ctx.outputs.run_id }}
+    steps:
+      - id: ctx
+        run: echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"          
