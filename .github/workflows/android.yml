@@ -3,6 +3,15 @@ name: android
 on:
   workflow_dispatch:
   workflow_call:
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true    
     outputs:
       run_id:
         description: "Run ID of this reusable workflow call"

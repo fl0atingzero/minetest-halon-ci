@@ -21,6 +21,7 @@ concurrency:
 jobs:
   android:
     uses: ./.github/workflows/android.yml
+    secrets: inherit
 
   macos:
     uses: ./.github/workflows/macos.yml
