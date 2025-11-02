@@ -62,30 +62,26 @@ jobs:
           path: dist
 
       - name: Flatten artifact directories and rename to artifact names
+        shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
-          count=0
-          while IFS= read -r -d '' d; do
-            base="$(basename "$d")"
-            files=( "$d"/* )
+          for d in dist/*/ ; do
+            base="${d%/}"; base="${base##*/}"     # имя артефакта (папка)
+            files=( "$d"* )
             if (( ${#files[@]} == 0 )); then
-              echo "WARN: no files in $d"
-              continue
+              echo "WARN: no files in $d"; continue
             fi
             if (( ${#files[@]} > 1 )); then
-              echo "ERROR: more than one file in artifact $base"
-              ls -la "$d"
-              exit 1
+              echo "ERROR: more than one file in artifact '$base'"; ls -la "$d"; exit 1
             fi
             f="${files[0]}"
-            # переименуем в dist/<artifact-name>
-            mv "$f" "dist/$base"
-            rmdir "$d"
+            tmp="dist/.tmp_${base}"
+            mv "$f" "$tmp"        # выносим файл наверх во временное имя
+            rm -rf "$d"           # удаляем папку-артефакт
+            mv "$tmp" "dist/$base"  # переименовываем файл в имя артефакта
             echo "-> dist/$base"
-            ((count++))
-          done < <(find dist -mindepth 1 -maxdepth 1 -type d -print0)
-          echo "Flattened $count artifacts."
+          done
 
       - name: List collected files
         run: |
