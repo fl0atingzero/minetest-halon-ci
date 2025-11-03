@@ -124,4 +124,5 @@ jobs:
             echo "No artifacts found in dist/"; exit 1
           fi
           gh release upload nightly "${files[@]}" --clobber
-          gh release edit nightly --notes-file notes.md --latest
+          gh release edit nightly --notes-file notes.md
+
