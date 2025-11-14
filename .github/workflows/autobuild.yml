@@ -48,40 +48,21 @@ jobs:
         with:
           run-id: ${{ needs.android.outputs.run_id }}
           path: dist
+          merge-multiple: true
 
       - name: Download artifacts (macOS)
         uses: actions/download-artifact@v4
         with:
           run-id: ${{ needs.macos.outputs.run_id }}
           path: dist
+          merge-multiple: true
 
       - name: Download artifacts (Windows)
         uses: actions/download-artifact@v4
         with:
           run-id: ${{ needs.windows.outputs.run_id }}
           path: dist
-
-      - name: Flatten artifact directories and rename to artifact names
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          for d in dist/*/ ; do
-            base="${d%/}"; base="${base##*/}"     # имя артефакта (папка)
-            files=( "$d"* )
-            if (( ${#files[@]} == 0 )); then
-              echo "WARN: no files in $d"; continue
-            fi
-            if (( ${#files[@]} > 1 )); then
-              echo "ERROR: more than one file in artifact '$base'"; ls -la "$d"; exit 1
-            fi
-            f="${files[0]}"
-            tmp="dist/.tmp_${base}"
-            mv "$f" "$tmp"        # выносим файл наверх во временное имя
-            rm -rf "$d"           # удаляем папку-артефакт
-            mv "$tmp" "dist/$base"  # переименовываем файл в имя артефакта
-            echo "-> dist/$base"
-          done
+          merge-multiple: true
 
       - name: List collected files
         run: |
