@@ -48,21 +48,72 @@ jobs:
         with:
           run-id: ${{ needs.android.outputs.run_id }}
           path: dist
-          merge-multiple: true
 
       - name: Download artifacts (macOS)
         uses: actions/download-artifact@v4
         with:
           run-id: ${{ needs.macos.outputs.run_id }}
           path: dist
-          merge-multiple: true
 
       - name: Download artifacts (Windows)
         uses: actions/download-artifact@v4
         with:
           run-id: ${{ needs.windows.outputs.run_id }}
           path: dist
-          merge-multiple: true
+
+      - name: Flatten artifacts to their artifact names; zip when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          out="dist_out"
+          mkdir -p "$out"
+
+          for d in dist/*/ ; do
+            base="${d%/}"; base="${base##*/}"   # artifact name (folder name)
+            files=( "$d"* )
+            if (( ${#files[@]} != 1 )); then
+              echo "ERROR: expected exactly 1 file in artifact '$base', got ${#files[@]}"
+              ls -la "$d"
+              exit 1
+            fi
+
+            f="${files[0]}"
+            ext="${f##*.}"; ext="${ext,,}"      # file extension (lowercased)
+
+            case "$ext" in
+              zip)
+                # Windows: already zipped -> rename to <artifact>.zip
+                mv -- "$f" "$out/${base}.zip"
+                ;;
+
+              dmg)
+                # macOS: zip the DMG -> <artifact>.dmg.zip
+                zip -9 -q -j "$out/${base}.dmg.zip" "$f"
+                ;;
+
+              aab|apks)
+                # Android: want <artifact>.zip; artifact name already ends with .aab/.apks
+                if [[ "$base" =~ \.(aab|apks)$ ]]; then
+                  zip -9 -q -j "$out/${base}.zip" "$f"
+                else
+                  # fallback if artifact name didn't include the ext
+                  zip -9 -q -j "$out/${base}.${ext}.zip" "$f"
+                fi
+                ;;
+
+              *)
+                # Fallback: keep extension
+                mv -- "$f" "$out/${base}.${ext}"
+                ;;
+            esac
+
+            rm -rf -- "$d"
+            echo "-> $out/$(basename -- "$out/${base}")"
+          done
+
+          rm -rf dist
+          mv "$out" dist
 
       - name: List collected files
         run: |
