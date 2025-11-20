@@ -120,41 +120,29 @@ jobs:
           echo "Collected files:"
           find dist -maxdepth 1 -type f -printf '%f\n' | sort
 
-      # Полное пересоздание релиза, чтобы обновлялась Published дата
-      - name: Re-create 'nightly' release fresh (delete then create)
-        run: |
-          set -euo pipefail
-          tag="nightly"
-          title="Nightly build $(date -u +'%Y-%m-%d %H:%M UTC')"
-
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Deleting existing release '$tag' (and tag)..."
-            gh release delete "$tag" --cleanup-tag -y
-          fi
-
-          echo "Creating release '$tag'..."
-          gh release create "$tag" \
-            --title "$title" \
-            --notes "Automated nightly build" \
-            --latest \
-            --target "$GITHUB_SHA"
-
       - name: Generate release notes
         run: |
           {
             echo "Artifacts:"
             find dist -maxdepth 1 -type f -printf ' - %f\n' | sort
           } > notes.md
-          cat notes.md
 
-      - name: Upload fresh assets (use artifact names)
+      - name: Create release and upload assets (one shot)
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          files=(dist/*)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No artifacts found in dist/"; exit 1
-          fi
-          gh release upload nightly "${files[@]}" --clobber
-          gh release edit nightly --notes-file notes.md
+          tag="nightly"
+          title="Nightly build $(date -u +'%Y-%m-%d %H:%M UTC')"
 
+          # Clean up previous release/tag (with a short wait)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --cleanup-tag -y
+            for i in {1..20}; do
+              gh release view "$tag" >/dev/null 2>&1 && sleep 2 || break
+            done
+          fi
+
+          gh release create "$tag" dist/* \
+            --title "$title" \
+            --notes-file notes.md \
+            --latest \
+            --target "$GITHUB_SHA"
