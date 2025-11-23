@@ -1,8 +1,8 @@
 diff --git a/src/client/client.cpp b/src/client/client.cpp
-index d76f4010e..7506b0abe 100644
+index 7f255a9fa..38b098644 100644
 --- a/src/client/client.cpp
 +++ b/src/client/client.cpp
-@@ -202,8 +202,14 @@ void Client::loadMods()
+@@ -215,8 +215,14 @@ void Client::loadMods()
  		}
  		paths["mods"] = path_user;
  
@@ -19,27 +19,23 @@ index d76f4010e..7506b0abe 100644
  		modconf.checkConflictsAndDeps();
  	}
  
-@@ -286,8 +292,13 @@ const std::string &Client::getBuiltinLuaPath()
- 
+@@ -300,6 +306,11 @@ const std::string &Client::getBuiltinLuaPath()
  const std::string &Client::getClientModsLuaPath()
  {
--	static const std::string clientmods_dir = porting::path_share + DIR_DELIM + "clientmods";
--	return clientmods_dir;
-+    static const std::string clientmods_dir = porting::path_share + DIR_DELIM + "clientmods";
+ 	static const std::string clientmods_dir = porting::path_share + DIR_DELIM + "clientmods";
 +#if defined(__APPLE__)
-+    // Ensure visibility regardless of log level
-+    rawstream << "macOS: shared clientmods path (path_share/clientmods) = "
-+              << clientmods_dir << std::endl;
++	// Ensure visibility regardless of log level
++	rawstream << "macOS: shared clientmods path (path_share/clientmods) = "
++	          << clientmods_dir << std::endl;
 +#endif
-+    return clientmods_dir;
+ 	return clientmods_dir;
  }
  
- const std::vector<ModSpec>& Client::getMods() const
 diff --git a/src/content/mod_configuration.cpp b/src/content/mod_configuration.cpp
-index bcbdd89ea..848d10346 100644
+index 8a33497ce..005a93790 100644
 --- a/src/content/mod_configuration.cpp
 +++ b/src/content/mod_configuration.cpp
-@@ -189,6 +189,96 @@ void ModConfiguration::addModsFromConfig(
+@@ -191,6 +191,96 @@ void ModConfiguration::addModsFromConfig(
  	}
  }
  
@@ -118,9 +114,9 @@ index bcbdd89ea..848d10346 100644
 +			const auto &candidate = candidates.find(pair.first);
 +			if (candidate != candidates.end()) {
 +				errorstream << "Unable to load " << pair.first << " as the specified path "
-+							<< pair.second << " could not be found. "
-+							<< "However, it is available in the following locations:"
-+							<< std::endl;
++						<< pair.second << " could not be found. "
++						<< "However, it is available in the following locations:"
++						<< std::endl;
 +				for (const auto &path : candidate->second) {
 +					errorstream << " - " << path << std::endl;
 +				}
@@ -137,7 +133,7 @@ index bcbdd89ea..848d10346 100644
  {
  	// report on name conflicts
 diff --git a/src/content/mod_configuration.h b/src/content/mod_configuration.h
-index 17436ef9a..e0857b25b 100644
+index 32f72998c..ebaca5bdf 100644
 --- a/src/content/mod_configuration.h
 +++ b/src/content/mod_configuration.h
 @@ -5,6 +5,7 @@
@@ -146,9 +142,9 @@ index 17436ef9a..e0857b25b 100644
  #include "mods.h"
 +#include <utility>
  
+ struct SubgameSpec;
  
- /**
-@@ -66,6 +67,15 @@ class ModConfiguration
+@@ -67,6 +68,15 @@ class ModConfiguration
  	void addModsFromConfig(const std::string &settings_path,
  			const std::unordered_map<std::string, std::string> &modPaths);
  
