@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-arm-macos-xcode:
-    runs-on: macos-14
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Clone Minetest from Codeberg
@@ -38,7 +38,7 @@ jobs:
         working-directory: minetest
         run: |
           source ./util/ci/common.sh
-          install_macos_deps
+          install_macos_brew_deps
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
 
@@ -140,7 +140,7 @@ jobs:
         working-directory: minetest
         run: |
           source ./util/ci/common.sh
-          install_macos_deps
+          install_macos_brew_deps
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
 
