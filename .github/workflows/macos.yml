@@ -41,6 +41,10 @@ jobs:
           install_macos_brew_deps
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
+          # sdl2-compat does not provide the SDL2::SDL2-static CMake target.
+          brew unlink sdl2-compat || true
+          brew install sdl2
+          brew link --overwrite sdl2
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -143,6 +147,10 @@ jobs:
           install_macos_brew_deps
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
+          # sdl2-compat does not provide the SDL2::SDL2-static CMake target.
+          brew unlink sdl2-compat || true
+          brew install sdl2
+          brew link --overwrite sdl2
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -238,4 +246,4 @@ jobs:
       run_id: ${{ steps.ctx.outputs.run_id }}
     steps:
       - id: ctx
-        run: echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"          
+        run: echo "run_id=$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
