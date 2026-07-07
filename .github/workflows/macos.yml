@@ -41,10 +41,6 @@ jobs:
           install_macos_brew_deps
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
-          # sdl2-compat does not provide the SDL2::SDL2-static CMake target.
-          brew unlink sdl2-compat || true
-          brew install sdl2
-          brew link --overwrite sdl2
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -65,7 +61,6 @@ jobs:
           cmake .. \
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DUSE_SDL2_STATIC=TRUE \
             -DSDL2_INCLUDE_DIRS=/opt/homebrew/include/SDL2 \
             -DFREETYPE_LIBRARY=/opt/homebrew/lib/libfreetype.a \
             -DGETTEXT_INCLUDE_DIR=/opt/homebrew/include \
@@ -147,10 +142,6 @@ jobs:
           install_macos_brew_deps
           # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
           brew uninstall jsoncpp
-          # sdl2-compat does not provide the SDL2::SDL2-static CMake target.
-          brew unlink sdl2-compat || true
-          brew install sdl2
-          brew link --overwrite sdl2
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -187,7 +178,6 @@ jobs:
             -DCMAKE_FIND_FRAMEWORK=LAST \
             -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DUSE_SDL2_STATIC=TRUE \
             -DSDL2_INCLUDE_DIRS="$SDL2_PREFIX/include/SDL2" \
             -DFREETYPE_LIBRARY="$FREETYPE_PREFIX/lib/libfreetype.a" \
             -DGETTEXT_INCLUDE_DIR="$GETTEXT_PREFIX/include" \
