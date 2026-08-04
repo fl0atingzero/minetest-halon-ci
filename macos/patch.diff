@@ -35,7 +35,7 @@ diff --git a/src/content/mod_configuration.cpp b/src/content/mod_configuration.c
 index 8a33497ce..005a93790 100644
 --- a/src/content/mod_configuration.cpp
 +++ b/src/content/mod_configuration.cpp
-@@ -191,6 +191,96 @@ void ModConfiguration::addModsFromConfig(
+@@ -191,6 +191,97 @@ void ModConfiguration::addModsFromConfig(
  	}
  }
  
@@ -81,7 +81,8 @@ index 8a33497ce..005a93790 100644
 +	std::unordered_map<std::string, std::vector<std::string>> candidates;
 +
 +	for (const auto &modPath : modPaths) {
-+		std::vector<ModSpec> addon_mods_in_path = flattenMods(getModsInPath(modPath.second, modPath.first));
++		std::vector<ModSpec> addon_mods_in_path = flattenMods(
++				getModsInPath(modPath.second, modPath.first), true);
 +		for (const auto &mod : addon_mods_in_path) {
 +			const auto &pair = load_mod_names.find(mod.name);
 +			if (pair != load_mod_names.end()) {
