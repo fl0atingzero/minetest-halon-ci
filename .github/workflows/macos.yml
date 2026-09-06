@@ -139,9 +139,7 @@ jobs:
         working-directory: minetest
         run: |
           source ./util/ci/common.sh
-          install_macos_brew_deps
-          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
-          brew uninstall jsoncpp
+          install_macos_precompiled_deps 11.3 x86_64
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -160,41 +158,42 @@ jobs:
           mkdir build_xcode
           cd build_xcode
 
-          BREW_PREFIX="$(brew --prefix)"
-          SDL2_PREFIX="$(brew --prefix sdl2)"
-          FREETYPE_PREFIX="$(brew --prefix freetype)"
-          GETTEXT_PREFIX="$(brew --prefix gettext)"
-          LUAJIT_PREFIX="$(brew --prefix luajit)"
-          OGG_PREFIX="$(brew --prefix libogg)"
-          VORBIS_PREFIX="$(brew --prefix libvorbis)"
-          ZSTD_PREFIX="$(brew --prefix zstd)"
-          GMP_PREFIX="$(brew --prefix gmp)"
-          JPEG_PREFIX="$(brew --prefix jpeg-turbo)"
-          PNG_PREFIX="$(brew --prefix libpng)"
+          DEPS_DIR="/Users/Shared/macos11.3_x86_64_deps"
 
           cmake .. \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.3 \
             -DCMAKE_FIND_FRAMEWORK=LAST \
-            -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
+            -DCMAKE_PREFIX_PATH="$DEPS_DIR" \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DSDL2_INCLUDE_DIRS="$SDL2_PREFIX/include/SDL2" \
-            -DFREETYPE_LIBRARY="$FREETYPE_PREFIX/lib/libfreetype.a" \
-            -DGETTEXT_INCLUDE_DIR="$GETTEXT_PREFIX/include" \
-            -DGETTEXT_LIBRARY="$GETTEXT_PREFIX/lib/libintl.a" \
-            -DLUA_LIBRARY="$LUAJIT_PREFIX/lib/libluajit-5.1.a" \
-            -DOGG_LIBRARY="$OGG_PREFIX/lib/libogg.a" \
-            -DVORBIS_LIBRARY="$VORBIS_PREFIX/lib/libvorbis.a" \
-            -DVORBISFILE_LIBRARY="$VORBIS_PREFIX/lib/libvorbisfile.a" \
-            -DZSTD_LIBRARY="$ZSTD_PREFIX/lib/libzstd.a" \
-            -DZSTD_INCLUDE_DIR="$ZSTD_PREFIX/include" \
-            -DGMP_LIBRARY="$GMP_PREFIX/lib/libgmp.a" \
+            -DUSE_SDL2_STATIC=TRUE \
+            -DSDL2_INCLUDE_DIRS="$DEPS_DIR/include/SDL2" \
+            -DFREETYPE_LIBRARY="$DEPS_DIR/lib/libfreetype.a" \
+            -DFREETYPE_INCLUDE_DIRS="$DEPS_DIR/include/freetype2" \
+            -DGETTEXT_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DGETTEXT_LIBRARY="$DEPS_DIR/lib/libintl.a" \
+            -DLUA_LIBRARY="$DEPS_DIR/lib/libluajit-5.1.a" \
+            -DLUA_INCLUDE_DIR="$DEPS_DIR/include/luajit-2.1" \
+            -DOGG_LIBRARY="$DEPS_DIR/lib/libogg.a" \
+            -DOGG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DVORBIS_LIBRARY="$DEPS_DIR/lib/libvorbis.a" \
+            -DVORBISFILE_LIBRARY="$DEPS_DIR/lib/libvorbisfile.a" \
+            -DVORBIS_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DOPENAL_LIBRARY="$DEPS_DIR/lib/libopenal.a" \
+            -DOPENAL_INCLUDE_DIR="$DEPS_DIR/include/AL" \
+            -DZSTD_LIBRARY="$DEPS_DIR/lib/libzstd.a" \
+            -DZSTD_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DGMP_LIBRARY="$DEPS_DIR/lib/libgmp.a" \
+            -DGMP_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DJSON_LIBRARY="$DEPS_DIR/lib/libjsoncpp.a" \
+            -DJSON_INCLUDE_DIR="$DEPS_DIR/include" \
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
-            -DJPEG_INCLUDE_DIR="$JPEG_PREFIX/include" \
-            -DJPEG_LIBRARY="$JPEG_PREFIX/lib/libjpeg.a" \
-            -DPNG_LIBRARY="$PNG_PREFIX/lib/libpng.a" \
+            -DJPEG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DJPEG_LIBRARY="$DEPS_DIR/lib/libjpeg.a" \
+            -DPNG_LIBRARY="$DEPS_DIR/lib/libpng16.a" \
+            -DPNG_PNG_INCLUDE_DIR="$DEPS_DIR/include" \
             -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
