@@ -37,10 +37,11 @@ jobs:
       - name: Install deps
         working-directory: minetest
         run: |
-          source ./util/ci/common.sh
-          install_macos_brew_deps
-          # brew jsoncpp do not include libjsoncpp.a, and if installed header conflict caused build failure
-          brew uninstall jsoncpp
+          DEPS_ARCHIVE="/Users/Shared/macos11.3_arm64_deps.tar.gz"
+          curl --fail --location --retry 3 \
+            --output "$DEPS_ARCHIVE" \
+            https://github.com/luanti-org/luanti_macos_deps/releases/download/latest/macos11.3_arm64_deps.tar.gz
+          tar -xf "$DEPS_ARCHIVE" -C /Users/Shared
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -58,24 +59,45 @@ jobs:
         run: |
           mkdir build_xcode
           cd build_xcode
+
+          DEPS_DIR="/Users/Shared/macos11.3_arm64_deps"
+
           cmake .. \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.3 \
             -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_PREFIX_PATH="$DEPS_DIR" \
             -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
-            -DSDL2_INCLUDE_DIRS=/opt/homebrew/include/SDL2 \
-            -DFREETYPE_LIBRARY=/opt/homebrew/lib/libfreetype.a \
-            -DGETTEXT_INCLUDE_DIR=/opt/homebrew/include \
-            -DGETTEXT_LIBRARY=/opt/homebrew/lib/libintl.a \
-            -DLUA_LIBRARY=/opt/homebrew/lib/libluajit-5.1.a \
-            -DOGG_LIBRARY=/opt/homebrew/lib/libogg.a \
-            -DVORBIS_LIBRARY=/opt/homebrew/lib/libvorbis.a \
-            -DVORBISFILE_LIBRARY=/opt/homebrew/lib/libvorbisfile.a \
-            -DZSTD_LIBRARY=/opt/homebrew/lib/libzstd.a \
-            -DGMP_LIBRARY=/opt/homebrew/lib/libgmp.a \
+            -DUSE_SDL2_STATIC=TRUE \
+            -DSDL2_INCLUDE_DIRS="$DEPS_DIR/include/SDL2" \
+            -DFREETYPE_LIBRARY="$DEPS_DIR/lib/libfreetype.a" \
+            -DFREETYPE_INCLUDE_DIRS="$DEPS_DIR/include/freetype2" \
+            -DGETTEXT_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DGETTEXT_LIBRARY="$DEPS_DIR/lib/libintl.a" \
+            -DLUA_LIBRARY="$DEPS_DIR/lib/libluajit-5.1.a" \
+            -DLUA_INCLUDE_DIR="$DEPS_DIR/include/luajit-2.1" \
+            -DOGG_LIBRARY="$DEPS_DIR/lib/libogg.a" \
+            -DOGG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DVORBIS_LIBRARY="$DEPS_DIR/lib/libvorbis.a" \
+            -DVORBISFILE_LIBRARY="$DEPS_DIR/lib/libvorbisfile.a" \
+            -DVORBIS_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DOPENAL_LIBRARY="$DEPS_DIR/lib/libopenal.a" \
+            -DOPENAL_INCLUDE_DIR="$DEPS_DIR/include/AL" \
+            -DZSTD_LIBRARY="$DEPS_DIR/lib/libzstd.a" \
+            -DZSTD_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DGMP_LIBRARY="$DEPS_DIR/lib/libgmp.a" \
+            -DGMP_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DJSON_LIBRARY="$DEPS_DIR/lib/libjsoncpp.a" \
+            -DJSON_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DLIBZIP_LIBRARY="$DEPS_DIR/lib/libzip.a" \
+            -DLIBZIP_INCLUDE_DIR="$DEPS_DIR/include" \
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
-            -DJPEG_LIBRARY=/opt/homebrew/lib/libjpeg.a \
-            -DPNG_LIBRARY=/opt/homebrew/lib/libpng.a \
+            -DJPEG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DJPEG_LIBRARY="$DEPS_DIR/lib/libjpeg.a" \
+            -DPNG_LIBRARY="$DEPS_DIR/lib/libpng16.a" \
+            -DPNG_PNG_INCLUDE_DIR="$DEPS_DIR/include" \
             -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
@@ -138,8 +160,11 @@ jobs:
       - name: Install deps
         working-directory: minetest
         run: |
-          source ./util/ci/common.sh
-          install_macos_precompiled_deps 11.3 x86_64
+          DEPS_ARCHIVE="/Users/Shared/macos11.3_x86_64_deps.tar.gz"
+          curl --fail --location --retry 3 \
+            --output "$DEPS_ARCHIVE" \
+            https://github.com/luanti-org/luanti_macos_deps/releases/download/latest/macos11.3_x86_64_deps.tar.gz
+          tar -xf "$DEPS_ARCHIVE" -C /Users/Shared
 
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
@@ -187,6 +212,8 @@ jobs:
             -DGMP_INCLUDE_DIR="$DEPS_DIR/include" \
             -DJSON_LIBRARY="$DEPS_DIR/lib/libjsoncpp.a" \
             -DJSON_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DLIBZIP_LIBRARY="$DEPS_DIR/lib/libzip.a" \
+            -DLIBZIP_INCLUDE_DIR="$DEPS_DIR/include" \
             -DENABLE_LEVELDB=OFF \
             -DENABLE_POSTGRESQL=OFF \
             -DENABLE_REDIS=OFF \
