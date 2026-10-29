@@ -16,28 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode and install macOS 10.13 SDK
+      - name: Select Xcode
         run: |
           set -euo pipefail
 
           XCODE_APP="/Applications/Xcode_${XCODE_VERSION}.app"
           DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
-          SDK_DEST="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${MACOS_DEPLOYMENT_TARGET}.sdk"
-          PLATFORM_INFO="$DEVELOPER_DIR/Platforms/MacOSX.platform/Info.plist"
-
           sudo xcode-select -s "$DEVELOPER_DIR"
-          curl --fail --location --retry 3 \
-            --output MacOSX10.13.tar.bz2 \
-            https://github.com/alexey-lysiuk/macos-sdk/releases/download/10.13/MacOSX10.13.tar.bz2
-          echo "27943fb63c35e262b2da1cb4cc60d7427702a40caf20ec15c9d773919c6e409b  MacOSX10.13.tar.bz2" \
-            | shasum -a 256 --check
-          tar -xf MacOSX10.13.tar.bz2
-          sudo mv MacOSX10.13.sdk "$SDK_DEST"
-          sudo plutil -replace MinimumSDKVersion -string "$MACOS_DEPLOYMENT_TARGET" "$PLATFORM_INFO"
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+
+          printf '#include <cstddef>\nint main() {}\n' \
+            | xcrun clang++ -arch x86_64 -isysroot "$SDKROOT" \
+                -mmacosx-version-min="$MACOS_DEPLOYMENT_TARGET" -x c++ -fsyntax-only -
 
           {
             echo "DEVELOPER_DIR=$DEVELOPER_DIR"
-            echo "SDKROOT=$SDK_DEST"
+            echo "SDKROOT=$SDKROOT"
             echo "MACOSX_DEPLOYMENT_TARGET=$MACOS_DEPLOYMENT_TARGET"
           } >> "$GITHUB_ENV"
 
@@ -49,7 +43,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.DEPS_DIR }}
-          key: macos-10.13-x86_64-deps-v1-${{ env.DEPS_BUILDER_REV }}-${{ env.LUAJIT_REV }}
+          key: macos-10.13-x86_64-deps-v2-${{ env.DEPS_BUILDER_REV }}-${{ env.LUAJIT_REV }}
 
       - name: Build macOS 10.13 dependencies
         if: steps.deps-cache.outputs.cache-hit != 'true'
@@ -65,6 +59,14 @@ jobs:
           # The dependency builder normally runs on Apple Silicon.
           sed -i '' \
             's#M4=$(realpath /opt/homebrew/Cellar/m4/\*/bin/m4)#M4=$(brew --prefix m4)/bin/m4#' \
+            deps-builder/deps.sh
+
+          # The dependency builder assumes SDK version equals deployment target.
+          # Use Xcode's supported SDK while retaining the 10.13 deployment target.
+          sed -i '' \
+            's#sysroot="/Applications/$xcodeapp/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${osver}.sdk"#sysroot="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"#' \
+            deps-builder/deps.sh
+          grep -Fq 'sysroot="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"' \
             deps-builder/deps.sh
 
           mkdir deps-sources deps-build

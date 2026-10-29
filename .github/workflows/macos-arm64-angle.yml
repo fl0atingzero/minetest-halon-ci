@@ -66,6 +66,23 @@ jobs:
             https://github.com/luanti-org/luanti_macos_deps/releases/download/latest/macos12.3_arm64_angle_deps.tar.gz
           tar -xf "$DEPS_ARCHIVE" -C /Users/Shared
 
+          LIBZIP_ARCHIVE="$RUNNER_TEMP/libzip-1.11.4.tar.xz"
+          curl --fail --location --retry 3 \
+            --output "$LIBZIP_ARCHIVE" \
+            https://github.com/nih-at/libzip/releases/download/v1.11.4/libzip-1.11.4.tar.xz
+          echo "8a247f57d1e3e6f6d11413b12a6f28a9d388de110adc0ec608d893180ed7097b  $LIBZIP_ARCHIVE" \
+            | shasum -a 256 --check
+          tar -xf "$LIBZIP_ARCHIVE" -C "$RUNNER_TEMP"
+          cmake -S "$RUNNER_TEMP/libzip-1.11.4" -B "$RUNNER_TEMP/libzip-build" \
+            -DCMAKE_INSTALL_PREFIX="$DEPS_DIR" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_DEPLOYMENT_TARGET" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DENABLE_LZMA=OFF
+          cmake --build "$RUNNER_TEMP/libzip-build" --target install --parallel
+          test -f "$DEPS_DIR/include/zipconf.h"
+          test -f "$DEPS_DIR/lib/libzip.a"
+
       - name: Append clientmods copy to Xcode resources
         working-directory: minetest
         run: |
