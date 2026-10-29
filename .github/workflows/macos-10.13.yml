@@ -1,0 +1,228 @@
+name: macos-10.13
+
+on:
+  workflow_dispatch:
+
+env:
+  XCODE_VERSION: "16.2"
+  MACOS_DEPLOYMENT_TARGET: "10.13"
+  DEPS_DIR: /Users/Shared/macos10.13_x86_64_deps
+  DEPS_BUILDER_REV: 1d0dda11511283b83f62f47970e0eb458579e6b1
+  LUAJIT_REV: c6ffc141a8762b41703f9287d63d93622a13dd8f
+
+jobs:
+  build-intel-macos-10-13:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode and install macOS 10.13 SDK
+        run: |
+          set -euo pipefail
+
+          XCODE_APP="/Applications/Xcode_${XCODE_VERSION}.app"
+          DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
+          SDK_DEST="$DEVELOPER_DIR/Platforms/MacOSX.platform/Developer/SDKs/MacOSX${MACOS_DEPLOYMENT_TARGET}.sdk"
+          PLATFORM_INFO="$DEVELOPER_DIR/Platforms/MacOSX.platform/Info.plist"
+
+          sudo xcode-select -s "$DEVELOPER_DIR"
+          curl --fail --location --retry 3 \
+            --output MacOSX10.13.tar.bz2 \
+            https://github.com/alexey-lysiuk/macos-sdk/releases/download/10.13/MacOSX10.13.tar.bz2
+          echo "27943fb63c35e262b2da1cb4cc60d7427702a40caf20ec15c9d773919c6e409b  MacOSX10.13.tar.bz2" \
+            | shasum -a 256 --check
+          tar -xf MacOSX10.13.tar.bz2
+          sudo mv MacOSX10.13.sdk "$SDK_DEST"
+          sudo plutil -replace MinimumSDKVersion -string "$MACOS_DEPLOYMENT_TARGET" "$PLATFORM_INFO"
+
+          {
+            echo "DEVELOPER_DIR=$DEVELOPER_DIR"
+            echo "SDKROOT=$SDK_DEST"
+            echo "MACOSX_DEPLOYMENT_TARGET=$MACOS_DEPLOYMENT_TARGET"
+          } >> "$GITHUB_ENV"
+
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
+
+      - name: Restore macOS 10.13 dependencies
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DEPS_DIR }}
+          key: macos-10.13-x86_64-deps-v1-${{ env.DEPS_BUILDER_REV }}-${{ env.LUAJIT_REV }}
+
+      - name: Build macOS 10.13 dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          set -euo pipefail
+
+          brew install wget nasm m4 autoconf automake libtool
+          git clone https://github.com/luanti-org/luanti_macos_deps.git deps-builder
+          git -C deps-builder checkout "$DEPS_BUILDER_REV"
+
+          # The dependency builder normally runs on Apple Silicon.
+          sed -i '' \
+            's#M4=$(realpath /opt/homebrew/Cellar/m4/\*/bin/m4)#M4=$(brew --prefix m4)/bin/m4#' \
+            deps-builder/deps.sh
+
+          mkdir deps-sources deps-build
+          (
+            cd deps-sources
+            source ../deps-builder/deps.sh
+            download_macos_deps
+          )
+          (
+            cd deps-build
+            source ../deps-builder/deps.sh
+            untar_macos_deps "../deps-sources"
+            rm -rf LuaJIT-*
+            git clone https://github.com/LuaJIT/LuaJIT.git LuaJIT-pinned
+            git -C LuaJIT-pinned checkout "$LUAJIT_REV"
+            build_macos_deps x86_64 "$MACOS_DEPLOYMENT_TARGET" \
+              "$XCODE_VERSION" "$DEPS_DIR" no
+          )
+
+      - name: Clone Minetest from Codeberg
+        run: git clone --depth 1 https://codeberg.org/halon/Minetest.git minetest
+
+      - name: Get Minetest commit
+        id: mtsha
+        working-directory: minetest
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Apply patches
+        working-directory: minetest
+        run: |
+          git apply ../macos/patch.diff
+          git apply ../macos/10.13.diff
+
+      - name: Clone mcl_localplayer mod
+        working-directory: minetest
+        run: |
+          git clone --depth 1 https://codeberg.org/halon/mcl_localplayer.git clientmods/mcl_localplayer
+          echo "load_mod_mcl_localplayer = true" > clientmods/mods.conf
+
+      - name: Append clientmods copy to Xcode resources
+        working-directory: minetest
+        run: |
+          cat >> util/xcode/install_resources.cmake <<'CMAKE_SNIPPET'
+          execute_process(
+          	COMMAND ${CMAKE_COMMAND} -E copy_directory
+          	"$ENV{SOURCE_ROOT}/clientmods"
+          	"${RESOURCES_DIR}/clientmods"
+          )
+          CMAKE_SNIPPET
+
+      - name: Build with Xcode
+        working-directory: minetest
+        run: |
+          set -euo pipefail
+          mkdir build_xcode
+          cd build_xcode
+
+          cmake .. \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_DEPLOYMENT_TARGET" \
+            -DCMAKE_OSX_SYSROOT="$SDKROOT" \
+            -DCMAKE_FIND_FRAMEWORK=LAST \
+            -DCMAKE_PREFIX_PATH="$DEPS_DIR" \
+            -DRUN_IN_PLACE=FALSE -DENABLE_GETTEXT=TRUE \
+            -DBUILD_UNITTESTS=FALSE \
+            -DUSE_SDL2_STATIC=TRUE \
+            -DSDL2_INCLUDE_DIRS="$DEPS_DIR/include/SDL2" \
+            -DFREETYPE_LIBRARY="$DEPS_DIR/lib/libfreetype.a" \
+            -DFREETYPE_INCLUDE_DIRS="$DEPS_DIR/include/freetype2" \
+            -DGETTEXT_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DGETTEXT_LIBRARY="$DEPS_DIR/lib/libintl.a" \
+            -DLUA_LIBRARY="$DEPS_DIR/lib/libluajit-5.1.a" \
+            -DLUA_INCLUDE_DIR="$DEPS_DIR/include/luajit-2.1" \
+            -DOGG_LIBRARY="$DEPS_DIR/lib/libogg.a" \
+            -DOGG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DVORBIS_LIBRARY="$DEPS_DIR/lib/libvorbis.a" \
+            -DVORBISFILE_LIBRARY="$DEPS_DIR/lib/libvorbisfile.a" \
+            -DVORBIS_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DOPENAL_LIBRARY="$DEPS_DIR/lib/libopenal.a" \
+            -DOPENAL_INCLUDE_DIR="$DEPS_DIR/include/AL" \
+            -DZSTD_LIBRARY="$DEPS_DIR/lib/libzstd.a" \
+            -DZSTD_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DGMP_LIBRARY="$DEPS_DIR/lib/libgmp.a" \
+            -DGMP_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DJSON_LIBRARY="$DEPS_DIR/lib/libjsoncpp.a" \
+            -DJSON_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DLIBZIP_LIBRARY="$DEPS_DIR/lib/libzip.a" \
+            -DLIBZIP_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DENABLE_LEVELDB=OFF \
+            -DENABLE_POSTGRESQL=OFF \
+            -DENABLE_REDIS=OFF \
+            -DENABLE_OPENSSL=OFF \
+            -DJPEG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DJPEG_LIBRARY="$DEPS_DIR/lib/libjpeg.a" \
+            -DPNG_LIBRARY="$DEPS_DIR/lib/libpng16.a" \
+            -DPNG_PNG_INCLUDE_DIR="$DEPS_DIR/include" \
+            -DCMAKE_EXE_LINKER_FLAGS=-lbz2 \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Manual \
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=- \
+            -DCMAKE_XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME=YES \
+            -DXCODE_CODE_SIGN_ENTITLEMENTS=../../macos/mod.entitlements \
+            -GXcode
+          xcodebuild -project luanti.xcodeproj -scheme luanti -configuration Release build
+
+      - name: Validate macOS 10.13 artifact
+        working-directory: minetest
+        run: |
+          set -euo pipefail
+          APP="build_xcode/build/Release/luanti.app"
+          BIN="$APP/Contents/MacOS/luanti"
+
+          "$BIN" --version
+          PLIST_MIN="$(plutil -extract LSMinimumSystemVersion raw -o - "$APP/Contents/Info.plist")"
+          if [ "$PLIST_MIN" != "$MACOS_DEPLOYMENT_TARGET" ]; then
+            echo "Info.plist declares macOS $PLIST_MIN instead of $MACOS_DEPLOYMENT_TARGET."
+            exit 1
+          fi
+
+          otool -l "$BIN" > load-commands.txt
+          if ! grep -Eq 'minos 10\.13|version 10\.13' load-commands.txt; then
+            echo "Executable does not declare macOS 10.13 as its deployment target."
+            cat load-commands.txt
+            exit 1
+          fi
+
+          BAD_DYLIBS="$(otool -L "$BIN" | tail -n +2 | awk '{print $1}' \
+            | grep '^/' | grep -Ev '^(/System/Library/|/usr/lib/)' || true)"
+          if [ -n "$BAD_DYLIBS" ]; then
+            echo "Executable contains non-system absolute dynamic-library paths:"
+            echo "$BAD_DYLIBS"
+            exit 1
+          fi
+
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -d --entitlements :- "$APP"
+
+      - name: Pack DMG
+        id: dmg
+        working-directory: minetest
+        env:
+          MT_SHA: ${{ steps.mtsha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          BASENAME="luanti-macos-10.13-x86_64-nightly-${MT_SHA}"
+          DMG_NAME="${BASENAME}.dmg"
+          hdiutil create -ov \
+            -volname "Luanti Nightly" \
+            -srcfolder "build_xcode/build/Release/luanti.app" \
+            -format UDZO \
+            "$GITHUB_WORKSPACE/$DMG_NAME"
+          {
+            echo "DMG=$DMG_NAME"
+            echo "BASENAME=$BASENAME"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.dmg.outputs.BASENAME }}
+          path: ${{ github.workspace }}/${{ steps.dmg.outputs.DMG }}
+          if-no-files-found: error

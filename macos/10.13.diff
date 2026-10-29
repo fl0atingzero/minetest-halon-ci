@@ -1,0 +1,84 @@
+diff --git a/misc/macos/Info.plist.in b/misc/macos/Info.plist.in
+index 0cb03ca..5532695 100644
+--- a/misc/macos/Info.plist.in
++++ b/misc/macos/Info.plist.in
+@@ -20,6 +20,8 @@
+ 	<string>@VERSION_STRING@</string>
+ 	<key>LSApplicationCategoryType</key>
+ 	<string>public.app-category.games</string>
++	<key>LSMinimumSystemVersion</key>
++	<string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
+ 	<key>NSHighResolutionCapable</key>
+ 	<true/>
+ </dict>
+diff --git a/src/filesys.cpp b/src/filesys.cpp
+index 9a8db21..621cb7e 100644
+--- a/src/filesys.cpp
++++ b/src/filesys.cpp
+@@ -4,7 +4,11 @@
+ 
+ #include "filesys.h"
+ #include "util/string.h"
++#ifdef __APPLE__
++#include <ftw.h>
++#else
+ #include <filesystem>
++#endif
+ #include <cstdio>
+ #include <cstdlib>
+ #include <cstring>
+@@ -476,6 +480,26 @@ bool RecursiveDelete(const std::string &path)
+ {
+ 	assert(IsPathAbsolute(path));
+ 
++#ifdef __APPLE__
++	struct stat status;
++	if (lstat(path.c_str(), &status) != 0) {
++		if (errno == ENOENT)
++			return true;
++		errorstream << "RecursiveDelete: Failed to inspect \"" << path
++				<< "\": " << LAST_OS_ERROR() << std::endl;
++		return false;
++	}
++
++	infostream << "Recursively deleting \"" << path << "\"" << std::endl;
++	const auto remove_entry = [](const char *entry, const struct stat *, int,
++			struct FTW *) -> int { return remove(entry); };
++	if (nftw(path.c_str(), remove_entry, 64, FTW_DEPTH | FTW_PHYS) != 0) {
++		errorstream << "RecursiveDelete: Failed to delete \"" << path
++				<< "\": " << LAST_OS_ERROR() << std::endl;
++		return false;
++	}
++	return true;
++#else
+ 	std::filesystem::path p;
+ 	try {
+ 		// On Windows, this throws if `path` is not valid UTF-8.
+@@ -516,6 +540,7 @@ bool RecursiveDelete(const std::string &path)
+ 		return false;
+ 	}
+ 	return true;
++#endif
+ }
+ 
+ void GetRecursiveDirs(std::vector<std::string> &dirs, const std::string &dir)
+@@ -829,6 +854,11 @@ std::string AbsolutePath(const std::string &path)
+ #endif
+ 	if (!abs_path)
+ 		return "";
++#ifdef __APPLE__
++	std::string abs_path_str(abs_path);
++	free(abs_path);
++	return abs_path_str;
++#else
+ 	std::filesystem::path absolute_path(abs_path, std::filesystem::path::format::native_format);
+ 	free(abs_path);
+ 
+@@ -838,6 +868,7 @@ std::string AbsolutePath(const std::string &path)
+ 	while (abs_path_str.length() > root_string.length() && IsDirDelimiter(abs_path_str.back()))
+ 		abs_path_str.pop_back();
+ 	return abs_path_str;
++#endif
+ }
+ 
+ std::string AbsolutePathPartial(const std::string &path)
